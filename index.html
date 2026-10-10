@@ -300,6 +300,12 @@
           <label for="prompt">Prompt</label>
           <textarea id="prompt">side view platformer, 16-frame walk cycle, clean green screen background, consistent design, game sprite sheet, muscular brown cartoon gorilla ape character with spiky hair angry expression, walking to the right, 4x4 grid</textarea>
 
+          <label style="margin-top:12px">Reference Image (optional – upload your character)</label>
+          <div class="upload" id="refZone" style="min-height:110px;margin-bottom:12px">
+            <div class="hint">Drop or click to upload reference image<br><small>Helps match your character (img2img)</small></div>
+            <input type="file" id="refInput" accept="image/*" />
+          </div>
+
           <div class="row" style="margin-top:12px">
             <div>
               <label>Width</label>
@@ -465,6 +471,48 @@
     // ===== AI HORDE GENERATION =====
     let genImgUrl = null;
     let genImgElement = null;
+    let refBase64 = null; // data URL without the prefix for Horde
+
+    // Reference image upload
+    const refZone = document.getElementById('refZone');
+    const refInput = document.getElementById('refInput');
+    if (refZone && refInput) {
+      refZone.addEventListener('dragover', e => { e.preventDefault(); refZone.classList.add('drag'); });
+      refZone.addEventListener('dragleave', () => refZone.classList.remove('drag'));
+      refZone.addEventListener('drop', e => {
+        e.preventDefault();
+        refZone.classList.remove('drag');
+        if (e.dataTransfer.files[0]) handleRef(e.dataTransfer.files[0]);
+      });
+      refInput.addEventListener('change', () => { if (refInput.files[0]) handleRef(refInput.files[0]); });
+    }
+
+    function handleRef(file) {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const dataUrl = e.target.result;
+        // AI Horde wants base64 without the data:image/...;base64, prefix
+        refBase64 = dataUrl.split(',')[1] || dataUrl;
+        refZone.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.style.maxHeight = '120px';
+        refZone.appendChild(img);
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = 'Reference loaded – click or drop to replace';
+        refZone.appendChild(hint);
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.id = 'refInput';
+        input.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer';
+        input.addEventListener('change', () => { if (input.files[0]) handleRef(input.files[0]); });
+        refZone.appendChild(input);
+      };
+      reader.readAsDataURL(file);
+    }
 
     document.getElementById('genBtn').addEventListener('click', async () => {
       const btn = document.getElementById('genBtn');
@@ -489,13 +537,19 @@
           steps: steps,
           n: 1,
           sampler_name: "k_euler",
-          cfg_scale: 7
+          cfg_scale: 7,
+          denoising_strength: refBase64 ? 0.55 : undefined
         },
         nsfw: false,
         censor_nsfw: true,
         models: model ? [model] : [],
         r2: true
       };
+      // Attach reference image for img2img if uploaded
+      if (refBase64) {
+        body.source_image = refBase64;
+        body.source_processing = "img2img";
+      }
 
       try {
         // 1. Submit
