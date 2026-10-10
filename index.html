@@ -415,7 +415,7 @@
               </select>
             </div>
           </div>
-          <label for="gDesc">Describe your character (optional)</label>
+          <label for="gDesc">Describe your character (recommended for new-pose mode)</label>
           <textarea id="gDesc" style="min-height:62px" placeholder="e.g. muscular brown gorilla with spiky hair and an angry expression"></textarea>
 
           <h2 style="margin-top:18px">3. Sheet</h2>
@@ -423,7 +423,8 @@
             <div>
               <label for="gMode">Method</label>
               <select id="gMode">
-                <option value="proc" selected>Animate my character (no AI, instant)</option>
+                <option value="pose" selected>AI: new pose per frame (OpenPose, like Ludo.ai)</option>
+                <option value="proc">Animate my character (no AI, instant)</option>
                 <option value="sheet">AI: whole sheet (1 job)</option>
                 <option value="frames">AI: frame by frame (1 job per frame)</option>
               </select>
@@ -470,11 +471,47 @@
             <label class="check"><input type="checkbox" id="gFlip"> Flip the character horizontally</label>
           </div>
 
+          <div id="aiOpts">
+            <h2 style="margin-top:18px">4. Reference fidelity <span>AI</span></h2>
+            <div class="row">
+              <div id="lockWrap">
+                <label for="gLock">Shape lock (ControlNet)</label>
+                <select id="gLock">
+                  <option value="canny" selected>Edges – keeps the outline</option>
+                  <option value="hed">Soft edges</option>
+                  <option value="depth">Depth</option>
+                  <option value="none">Off (img2img only)</option>
+                </select>
+              </div>
+              <div>
+                <label for="gCands">Candidates per image</label>
+                <input type="number" id="gCands" value="2" min="1" max="4" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="gColor">Colour fix</label>
+                <select id="gColor">
+                  <option value="tone" selected>Match tones to reference</option>
+                  <option value="palette">Snap to reference palette</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+              <div>
+                <label for="gColorStr">Colour strength: <span id="gColorStrVal">0.70</span></label>
+                <input type="range" id="gColorStr" min="0.1" max="1" step="0.05" value="0.7" />
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" id="gAuto" checked> Add the reference's main colours to the prompt</label>
+            <label class="check"><input type="checkbox" id="gNorm" checked> Re-centre and re-scale every frame to match the reference</label>
+            <p class="note">Each candidate is compared with your reference (outline overlap and colours) and the closest one is kept.</p>
+          </div>
+
           <details>
             <summary>Advanced (AI methods)</summary>
             <label class="check"><input type="checkbox" id="gPose" checked> Add slight bob and lean to each frame of the template</label>
             <label for="gNeg">Negative prompt</label>
-            <textarea id="gNeg" style="min-height:56px">blurry, deformed, extra limbs, extra characters, text, watermark, grid lines, cropped, low quality</textarea>
+            <textarea id="gNeg" style="min-height:56px">blurry, deformed, extra limbs, extra characters, different character, different colors, different outfit, text, watermark, grid lines, cropped, low quality</textarea>
             <div class="row">
               <div>
                 <label for="gSteps">Steps</label>
@@ -667,12 +704,17 @@
       const st = {
         refImg: null,        // original uploaded Image
         refCanvas: null,     // prepared (trimmed / keyed) reference
+        palette: null,       // dominant colours of the reference [{rgb, share}]
+        paletteWords: '',    // e.g. "brown, tan, black"
+        refStats: null,      // per-channel mean / sd of the reference's opaque pixels
         res: null,           // { cols, rows, cw, ch, seed, tainted, base, cur }
         running: false,
         abort: null,
         activeIds: new Set(),
         animTimer: null,
         denoiseTouched: false,
+        lockOff: false,      // ControlNet unavailable this run
+        lockFailed: false,
         tplTimer: null
       };
 
@@ -694,6 +736,7 @@
       };
       const setBar = pct => { $('genBar').style.width = pct + '%'; };
       const say = (msg, type = '') => setStatus('genStatus', msg, type);
+      const lockNote = () => st.lockFailed ? ' (Shape lock was unavailable on the Horde, so plain img2img was used.)' : '';
 
       // ---------- prompt building ----------
       const ACTIONS = {
@@ -735,14 +778,32 @@
           cfgScale: clamp(parseFloat($('gCfg').value) || 7, 1, 20),
           denoise: parseFloat($('gDenoise').value),
           model: $('gModel').value.trim(), seed: $('gSeed').value.trim(), key: $('gKey').value.trim(),
-          pose: $('gPose').checked, flip: $('gFlip').checked, split: $('gSplit').checked, conc: clamp(parseInt($('gConc').value, 10) || 2, 1, 4)
+          pose: $('gPose').checked, flip: $('gFlip').checked, split: $('gSplit').checked, conc: clamp(parseInt($('gConc').value, 10) || 2, 1, 4),
+          lock: $('gLock').value, cands: clamp(parseInt($('gCands').value, 10) || 1, 1, 4),
+          colorFix: $('gColor').value, colorStr: parseFloat($('gColorStr').value),
+          autoDesc: $('gAuto').checked, norm: $('gNorm').checked
         };
+      }
+
+      // Words that tie the generation to the uploaded character.
+      function identity(c) {
+        if (c.mode === 'pose') {      // no image goes in, so identity comes from words and colours
+          return [
+            c.autoDesc && st.paletteWords ? 'colour palette: ' + st.paletteWords : '',
+            'consistent character design'
+          ].filter(Boolean).join(', ');
+        }
+        if (!st.refCanvas) return '';
+        return [
+          'the same character as the reference image', 'identical design, outfit and proportions',
+          c.autoDesc && st.paletteWords ? 'colour palette: ' + st.paletteWords : ''
+        ].filter(Boolean).join(', ');
       }
 
       function sheetPrompt(c) {
         return [
-          STYLES[c.style], 'sprite sheet', `${c.cols}x${c.rows} grid of ${c.n} animation frames`, ACTIONS[c.action],
-          'same single character in every cell', VIEWS[c.view], c.desc,
+          STYLES[c.style], 'sprite sheet', c.desc, identity(c), `${c.cols}x${c.rows} grid of ${c.n} animation frames`, ACTIONS[c.action],
+          'same single character in every cell', VIEWS[c.view],
           `solid flat ${c.bgName} background`, 'evenly spaced, consistent design, full body, no text'
         ].filter(Boolean).join(', ');
       }
@@ -750,7 +811,7 @@
         const poses = POSES[c.action];
         const pose = poses ? poses[Math.floor(i * poses.length / c.n)] : '';
         return [
-          STYLES[c.style], 'single game sprite', c.desc, VIEWS[c.view], pose,
+          STYLES[c.style], 'single game sprite', c.desc, identity(c), VIEWS[c.view], pose,
           `frame ${i + 1} of ${c.n} of a ${ACTIONS[c.action]}`,
           `solid flat ${c.bgName} background`, 'centered, full body, consistent design, no text'
         ].filter(Boolean).join(', ');
@@ -858,11 +919,12 @@
         ctx.restore();
       }
 
+      // bg = null gives a transparent canvas (used for outline masks).
       function newBgCanvas(w, h, bg) {
         const cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         const ctx = cv.getContext('2d');
-        ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h); }
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         return cv;
@@ -871,9 +933,9 @@
         const m = Math.max(c.cols, c.rows);
         return { W: round64(c.size * c.cols / m), H: round64(c.size * c.rows / m) };
       }
-      function buildSheetTemplate(c) {
+      function buildSheetTemplate(c, mask) {
         const { W, H } = sheetGeometry(c);
-        const cv = newBgCanvas(W, H, c.bg);
+        const cv = newBgCanvas(W, H, mask ? null : c.bg);
         const ctx = cv.getContext('2d');
         const cw = W / c.cols, ch = H / c.rows;
         for (let i = 0; i < c.n; i++) {
@@ -881,15 +943,434 @@
         }
         return cv;
       }
-      function buildFrameTemplate(c, i) {
-        const cv = newBgCanvas(c.size, c.size, c.bg);
+      function buildFrameTemplate(c, i, mask) {
+        const cv = newBgCanvas(c.size, c.size, mask ? null : c.bg);
         drawCell(cv.getContext('2d'), st.refCanvas, 0, 0, c.size, c.size, i, c.n, c.pose);
         return cv;
       }
-      function canvasToB64(cv) {
-        let u = cv.toDataURL('image/webp', 0.92);
+      function canvasToB64(cv, q) {
+        let u = cv.toDataURL('image/webp', q || 0.92);
         if (!u.startsWith('data:image/webp')) u = cv.toDataURL('image/png');
         return u.split(',')[1];
+      }
+
+      // ---------- reference analysis (colours) ----------
+      function computePalette(cv, k) {
+        const { data, width, height } = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+        const px = [];
+        const stride = Math.max(1, Math.floor(width * height / 12000));
+        for (let i = 0; i < width * height; i += stride) {
+          const o = i * 4;
+          if (data[o + 3] > 200) px.push([data[o], data[o + 1], data[o + 2]]);
+        }
+        if (px.length < k * 4) return null;
+        const sorted = px.slice().sort((a, b) => (a[0] + a[1] + a[2]) - (b[0] + b[1] + b[2]));
+        const cents = Array.from({ length: k }, (_, j) => sorted[Math.floor((j + 0.5) * sorted.length / k)].slice());
+        const counts = new Array(k).fill(0);
+        for (let it = 0; it < 8; it++) {
+          const sum = cents.map(() => [0, 0, 0]);
+          counts.fill(0);
+          for (const p of px) {
+            let b = 0, bd = Infinity;
+            for (let j = 0; j < k; j++) {
+              const c = cents[j];
+              const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
+              if (d < bd) { bd = d; b = j; }
+            }
+            sum[b][0] += p[0]; sum[b][1] += p[1]; sum[b][2] += p[2]; counts[b]++;
+          }
+          for (let j = 0; j < k; j++) if (counts[j]) cents[j] = sum[j].map(v => v / counts[j]);
+        }
+        return cents
+          .map((c, j) => ({ rgb: c.map(Math.round), share: counts[j] / px.length }))
+          .filter(e => e.share > 0.01)
+          .sort((a, b) => b.share - a.share);
+      }
+
+      function statsOf(cv) {
+        const { data } = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+        const step = 4 * Math.max(1, Math.floor(data.length / 4 / 20000));
+        let n = 0; const s = [0, 0, 0], q = [0, 0, 0];
+        for (let o = 0; o < data.length; o += step) {
+          if (data[o + 3] > 200) { n++; for (let j = 0; j < 3; j++) { s[j] += data[o + j]; q[j] += data[o + j] * data[o + j]; } }
+        }
+        if (n < 20) return null;
+        const mean = s.map(v => v / n);
+        return { mean, sd: q.map((v, j) => Math.sqrt(Math.max(1, v / n - mean[j] * mean[j]))) };
+      }
+
+      function colorName(rgb) {
+        const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        if (l < 0.12) return 'black';
+        if (l > 0.92) return 'white';
+        const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+        if (s < 0.2) return l < 0.35 ? 'dark gray' : l > 0.7 ? 'light gray' : 'gray';
+        let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+        if (h < 15 || h >= 345) return l < 0.3 ? 'dark red' : 'red';
+        if (h < 45) return l < 0.45 ? 'brown' : (s < 0.6 && l > 0.6 ? 'tan' : 'orange');
+        if (h < 70) return l < 0.4 ? 'olive' : (s < 0.5 ? 'beige' : 'yellow');
+        if (h < 165) return l < 0.3 ? 'dark green' : 'green';
+        if (h < 200) return 'teal';
+        if (h < 255) return l < 0.3 ? 'navy blue' : 'blue';
+        if (h < 290) return 'purple';
+        return 'pink';
+      }
+
+      function analyzeRef() {
+        st.palette = null; st.refStats = null; st.paletteWords = '';
+        if (!st.refCanvas) return;
+        try {
+          st.palette = computePalette(st.refCanvas, 10);
+          st.refStats = statsOf(st.refCanvas);
+          if (st.palette) {
+            const names = [];
+            for (const e of st.palette) {
+              const nm = colorName(e.rgb);
+              if (!names.includes(nm)) names.push(nm);
+              if (names.length >= 4) break;
+            }
+            st.paletteWords = names.join(', ');
+          }
+        } catch (e) { /* pixels unreadable – skip colour features */ }
+      }
+
+      // ---------- pose skeletons for "new pose per frame" ----------
+      // Each frame gets its own OpenPose stick figure, so the AI draws a genuinely new pose.
+      const OP_COLORS = [[255,0,0],[255,85,0],[255,170,0],[255,255,0],[170,255,0],[85,255,0],[0,255,0],[0,255,85],[0,255,170],
+                         [0,255,255],[0,170,255],[0,85,255],[0,0,255],[85,0,255],[170,0,255],[255,0,255],[255,0,170],[255,0,85]];
+      const OP_LIMBS = [[1,2],[1,5],[2,3],[3,4],[5,6],[6,7],[1,8],[8,9],[9,10],[1,11],[11,12],[12,13],[1,0],[0,14],[14,16],[0,15],[15,17]];
+      const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+      // Joint angles (radians from straight down, forward = positive) for frame i of the action.
+      function poseParams(c, i) {
+        const t = i / c.n, ph = t * Math.PI * 2, PI = Math.PI, a = c.action;
+        const p = { lean: 0, air: 0, dx: 0, legA: [0, 0], legK: [0.1, 0.1], armB: [0, 0], armK: [0.2, 0.2] };
+        if (a === 'walk') {
+          p.lean = 0.05;
+          p.legA = [0.5 * Math.sin(ph), 0.5 * Math.sin(ph + PI)];
+          p.legK = [0.7 * Math.max(0, Math.cos(ph)) + 0.05, 0.7 * Math.max(0, Math.cos(ph + PI)) + 0.05];
+          p.armB = [-0.45 * Math.sin(ph), 0.45 * Math.sin(ph)];
+          p.armK = [0.35, 0.35];
+        } else if (a === 'run') {
+          p.lean = 0.2;
+          p.legA = [0.9 * Math.sin(ph), 0.9 * Math.sin(ph + PI)];
+          p.legK = [1.5 * Math.max(0, Math.cos(ph)) + 0.1, 1.5 * Math.max(0, Math.cos(ph + PI)) + 0.1];
+          p.armB = [-0.9 * Math.sin(ph), 0.9 * Math.sin(ph)];
+          p.armK = [1.5, 1.5];
+          p.air = 0.04 * (0.5 + 0.5 * Math.sin(2 * ph));
+        } else if (a === 'jump') {
+          const crouch = Math.max(1 - smooth(0, 0.2, t), smooth(0.8, 0.95, t));
+          const air = Math.sin(PI * clamp((t - 0.15) / 0.65, 0, 1));
+          p.air = 0.3 * air;
+          p.lean = 0.25 * crouch;
+          p.legA = [0.15 + 0.7 * crouch + 0.5 * air, -0.05 + 0.5 * crouch + 0.3 * air];
+          p.legK = [0.2 + 1.3 * crouch + 0.9 * air, 0.2 + 1.3 * crouch + 0.6 * air];
+          const up = 2.7 * smooth(0.12, 0.3, t) * (1 - smooth(0.7, 0.9, t));
+          p.armB = [-0.6 * crouch + up, -0.4 * crouch + up * 0.9];
+          p.armK = [0.3, 0.3];
+        } else if (a === 'attack') {
+          const wind = smooth(0, 0.3, t) * (1 - smooth(0.3, 0.38, t));
+          const strike = smooth(0.3, 0.42, t) * (1 - smooth(0.7, 1, t));
+          p.lean = -0.1 * wind + 0.22 * strike;
+          p.dx = 0.1 * strike;
+          p.legA = [0.35, -0.4]; p.legK = [0.45, 0.2];
+          p.armB = [-1.0 * wind + 1.5 * strike, 0.9];
+          p.armK = [1.0 * wind + 0.05 * strike, 1.7];
+        } else { // idle / custom
+          p.legA = [0.06, -0.06]; p.legK = [0.1, 0.1];
+          p.armB = [0.08 + 0.05 * Math.sin(ph), -0.08 - 0.05 * Math.sin(ph)]; p.armK = [0.15, 0.15];
+          p.lean = 0.01 * Math.sin(ph);
+        }
+        return p;
+      }
+
+      // 18 OpenPose keypoints in pixels. Feet are planted on the ground line unless the pose is airborne.
+      function poseKeypoints(c, i, size) {
+        const p = poseParams(c, i), v = c.view;
+        const side = v === 'side', mid = v === 'three' || v === 'top';
+        const spread = side ? 0.02 : mid ? 0.5 : 1;
+        const swing = side ? 1 : mid ? 0.8 : 0.25;
+        const kv = side ? 1 : mid ? 0.7 : 0.4;
+        const UL = 0.24, LL = 0.24, T = 0.30, UA = 0.15, LA = 0.15, L = p.lean;
+        const neck = [T * Math.sin(L), -T * Math.cos(L)];
+        const head = [neck[0] + 0.09 * Math.sin(L), neck[1] - 0.09 * Math.cos(L)];
+        const hipOff = [0.04 * spread, -0.04 * spread], shOff = [0.07 * spread, -0.07 * spread];
+        const hips = [], knees = [], ankles = [], shs = [], elbs = [], wrs = [];
+        for (let j = 0; j < 2; j++) {
+          const h = [hipOff[j], 0];
+          const a = p.legA[j] * swing, sa = a - p.legK[j] * kv;
+          const k = [h[0] + UL * Math.sin(a), UL * Math.cos(a)];
+          const an = [k[0] + LL * Math.sin(sa), k[1] + LL * Math.cos(sa)];
+          hips.push(h); knees.push(k); ankles.push(an);
+          const s = [neck[0] + shOff[j], neck[1] + 0.02];
+          const b = p.armB[j] * swing, fa = b + p.armK[j] * kv;
+          const e = [s[0] + UA * Math.sin(b), s[1] + UA * Math.cos(b)];
+          const w = [e[0] + LA * Math.sin(fa), e[1] + LA * Math.cos(fa)];
+          shs.push(s); elbs.push(e); wrs.push(w);
+        }
+        const hx = head[0], hy = head[1];
+        let nose = null, eyeR = null, eyeL = null, earR = null, earL = null;
+        if (v === 'back') { earR = [hx + 0.05, hy]; earL = [hx - 0.05, hy]; }
+        else if (side) { nose = [hx + 0.065, hy + 0.01]; eyeR = [hx + 0.035, hy - 0.015]; eyeL = [hx + 0.015, hy - 0.015]; earR = [hx - 0.02, hy]; }
+        else {
+          const o = mid ? 0.025 : 0;
+          nose = [hx + o, hy + 0.01]; eyeR = [hx + o + 0.025, hy - 0.015]; eyeL = [hx + o - 0.025, hy - 0.015];
+          earR = [hx + 0.05, hy]; earL = [hx - 0.05, hy];
+        }
+        const kp = [nose, neck, shs[0], elbs[0], wrs[0], shs[1], elbs[1], wrs[1],
+                    hips[0], knees[0], ankles[0], hips[1], knees[1], ankles[1], eyeR, eyeL, earR, earL];
+        const S = size * (c.action === 'jump' ? 0.6 : 0.78) / 0.95;   // fixed scale per action; jumps need headroom
+        const lowest = Math.max(ankles[0][1], ankles[1][1]);
+        const px = size / 2 + p.dx * S, py = size * 0.92 - lowest * S - p.air * S;
+        return kp.map(q => q ? [px + q[0] * S, py + q[1] * S] : null);
+      }
+
+      function drawPose(c, i, size) {
+        size = size || c.size;
+        const kp = poseKeypoints(c, i, size);
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = size;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, size, size);
+        const sw = Math.max(2, size / 128);
+        OP_LIMBS.forEach(([a, b], k) => {
+          const A = kp[a], B = kp[b];
+          if (!A || !B) return;
+          ctx.save();
+          ctx.translate((A[0] + B[0]) / 2, (A[1] + B[1]) / 2);
+          ctx.rotate(Math.atan2(B[1] - A[1], B[0] - A[0]));
+          ctx.fillStyle = `rgb(${OP_COLORS[k].join(',')})`;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, Math.max(1, Math.hypot(B[0] - A[0], B[1] - A[1]) / 2), sw, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 0, size, size);   // dims the limbs like the standard format
+        kp.forEach((q, k) => {
+          if (!q) return;
+          ctx.fillStyle = `rgb(${OP_COLORS[k].join(',')})`;
+          ctx.beginPath(); ctx.arc(q[0], q[1], sw, 0, Math.PI * 2); ctx.fill();
+        });
+        return cv;
+      }
+
+      function buildPoseSheet(c) {
+        const cell = 128;
+        const cv = document.createElement('canvas');
+        cv.width = cell * c.cols; cv.height = cell * c.rows;
+        const ctx = cv.getContext('2d');
+        for (let i = 0; i < c.n; i++) ctx.drawImage(drawPose(c, i, cell), (i % c.cols) * cell, Math.floor(i / c.cols) * cell);
+        return cv;
+      }
+
+      function attachPose(body, c, i) {
+        body.source_image = canvasToB64(drawPose(c, i), 1);
+        body.source_processing = 'img2img';
+        body.params.control_type = 'openpose';
+        body.params.image_is_control = true;      // the image is already a pose map, not a picture to repaint
+      }
+
+      // Without a template to compare against: reward the right colours and a properly sized figure.
+      function poseScore(keyed) {
+        const W = 96, H = Math.max(8, Math.round(W * keyed.height / keyed.width));
+        const a = thumb(keyed, W, H);
+        const pal = st.palette ? st.palette.map(e => e.rgb) : null;
+        let dsum = 0, dn = 0, fg = 0;
+        for (let i = 0; i < W * H; i++) {
+          const o = i * 4;
+          if (a[o + 3] > 60) fg++;
+          if (pal && a[o + 3] > 200) {
+            let best = Infinity;
+            for (const p of pal) {
+              const d = (a[o] - p[0]) ** 2 + (a[o + 1] - p[1]) ** 2 + (a[o + 2] - p[2]) ** 2;
+              if (d < best) best = d;
+            }
+            dsum += Math.sqrt(best); dn++;
+          }
+        }
+        const colour = dn ? 1 - Math.min(1, dsum / dn / 110) : 0.5;
+        const fill = 1 - Math.min(1, Math.abs(fg / (W * H) - 0.18) / 0.18);
+        return colour * 0.6 + fill * 0.4;
+      }
+
+      // ---------- post-processing of AI results ----------
+      function imgToCanvas(im) {
+        const cv = document.createElement('canvas');
+        cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+        cv.getContext('2d').drawImage(im, 0, 0);
+        return cv;
+      }
+
+      // Make the plain backdrop transparent (flood from the edges, chroma-key as a fallback).
+      function keyCell(cv, c) {
+        if (!floodKey(cv, 70)) chromaKey(cv, hexToRgb(c.bg), 70);
+        return cv;
+      }
+
+      function sliceKeyed(im, c, cw, ch) {
+        const cells = [];
+        for (let i = 0; i < c.n; i++) {
+          const cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          cv.getContext('2d').drawImage(im, (i % c.cols) * cw, Math.floor(i / c.cols) * ch, cw, ch, 0, 0, cw, ch);
+          cells.push(keyCell(cv, c));
+        }
+        return cells;
+      }
+
+      function assembleSheet(cells, c, cw, ch) {
+        const cv = newBgCanvas(cw * c.cols, ch * c.rows, null);
+        const ctx = cv.getContext('2d');
+        cells.forEach((cell, i) => { if (cell) ctx.drawImage(cell, (i % c.cols) * cw, Math.floor(i / c.cols) * ch); });
+        return cv;
+      }
+
+      function thumb(cv, W, H) {
+        const t = document.createElement('canvas');
+        t.width = W; t.height = H;
+        const x = t.getContext('2d');
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(cv, 0, 0, W, H);
+        return x.getImageData(0, 0, W, H).data;
+      }
+
+      // How close is a keyed candidate to the reference? Outline overlap + colour distance.
+      function scoreCand(keyed, mask) {
+        const W = 96, H = Math.max(8, Math.round(W * keyed.height / keyed.width));
+        const a = thumb(keyed, W, H), b = thumb(mask, W, H);
+        let inter = 0, uni = 0, dsum = 0, dn = 0;
+        const pal = st.palette ? st.palette.map(e => e.rgb) : null;
+        for (let i = 0; i < W * H; i++) {
+          const o = i * 4, x = a[o + 3] > 60, y = b[o + 3] > 60;
+          if (x && y) inter++;
+          if (x || y) uni++;
+          if (pal && a[o + 3] > 200) {
+            let best = Infinity;
+            for (const p of pal) {
+              const d = (a[o] - p[0]) ** 2 + (a[o + 1] - p[1]) ** 2 + (a[o + 2] - p[2]) ** 2;
+              if (d < best) best = d;
+            }
+            dsum += Math.sqrt(best); dn++;
+          }
+        }
+        const iou = uni ? inter / uni : 0;
+        const colour = dn ? 1 - Math.min(1, dsum / dn / 110) : 0.5;
+        return iou * 0.6 + colour * 0.4;
+      }
+
+      function bboxOf(cv) {
+        const { data, width, height } = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+        const rowCnt = new Uint16Array(height), colCnt = new Uint16Array(width);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            if (data[(y * width + x) * 4 + 3] > 40) { rowCnt[y]++; colCnt[x]++; }
+          }
+        }
+        const first = a => a.findIndex(v => v >= 2);
+        const last = a => { for (let i = a.length - 1; i >= 0; i--) if (a[i] >= 2) return i; return -1; };
+        const x0 = first(colCnt), x1 = last(colCnt), y0 = first(rowCnt), y1 = last(rowCnt);
+        if (x0 < 0 || y0 < 0) return null;
+        return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+      }
+
+      // Pull the generated colours back towards the reference. Statistics are pooled over
+      // all frames so every frame is corrected the same way (no flicker).
+      function colorFixCells(cells, c) {
+        if (c.colorFix === 'off' || !st.palette || !st.refStats) return;
+        const str = clamp(c.colorStr, 0, 1);
+        const items = cells.filter(Boolean).map(cv => {
+          const ctx = cv.getContext('2d');
+          return { ctx, id: ctx.getImageData(0, 0, cv.width, cv.height) };
+        });
+        if (c.colorFix === 'tone') {
+          let n = 0; const s = [0, 0, 0], q = [0, 0, 0];
+          for (const { id } of items) {
+            const p = id.data;
+            for (let o = 0; o < p.length; o += 4) {
+              if (p[o + 3] > 200) { n++; for (let j = 0; j < 3; j++) { s[j] += p[o + j]; q[j] += p[o + j] * p[o + j]; } }
+            }
+          }
+          if (n < 50) return;
+          const mg = s.map(v => v / n), sg = q.map((v, j) => Math.sqrt(Math.max(1, v / n - mg[j] * mg[j])));
+          const ratio = sg.map((v, j) => clamp(st.refStats.sd[j] / v, 0.7, 1.4));
+          for (const { ctx, id } of items) {
+            const p = id.data;
+            for (let o = 0; o < p.length; o += 4) {
+              if (p[o + 3] === 0) continue;
+              for (let j = 0; j < 3; j++) {
+                const nv = (p[o + j] - mg[j]) * ratio[j] + st.refStats.mean[j];
+                p[o + j] = clamp(Math.round(p[o + j] + (nv - p[o + j]) * str), 0, 255);
+              }
+            }
+            ctx.putImageData(id, 0, 0);
+          }
+        } else {
+          const pal = st.palette.map(e => e.rgb), cache = new Map();
+          const nearest = (r, g, b) => {
+            const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+            let hit = cache.get(key);
+            if (!hit) {
+              let best = Infinity;
+              for (const p of pal) {
+                const d = (r - p[0]) ** 2 + (g - p[1]) ** 2 + (b - p[2]) ** 2;
+                if (d < best) { best = d; hit = p; }
+              }
+              cache.set(key, hit);
+            }
+            return hit;
+          };
+          for (const { ctx, id } of items) {
+            const p = id.data;
+            for (let o = 0; o < p.length; o += 4) {
+              if (p[o + 3] === 0) continue;
+              const t = nearest(p[o], p[o + 1], p[o + 2]);
+              for (let j = 0; j < 3; j++) p[o + j] = Math.round(p[o + j] + (t[j] - p[o + j]) * str);
+            }
+            ctx.putImageData(id, 0, 0);
+          }
+        }
+      }
+
+      // Colour-fix, then re-fit every keyed cell to the same size and ground line as the
+      // reference, producing a clean transparent sheet with ow x oh frames.
+      function finalizeCells(cells, c, ow, oh) {
+        colorFixCells(cells, c);
+        const out = newBgCanvas(ow * c.cols, oh * c.rows, null);
+        const ctx = out.getContext('2d');
+        const ref = st.refCanvas || { width: 1, height: 2.2 }, pad = 0.08;   // no reference: assume a standing figure
+        const boxes = cells.map(cv => cv ? bboxOf(cv) : null);
+        const s0 = Math.min(ow * (1 - 2 * pad) / ref.width, oh * (1 - 2 * pad) / ref.height);
+        const tH = ref.height * s0;
+        const ks = boxes.map(b => b ? Math.min(tH / b.h, ow * 0.98 / b.w, oh * 0.98 / b.h) : null);
+        const valid = ks.filter(Boolean).sort((a, b) => a - b);
+        const km = valid.length ? valid[valid.length >> 1] : 1;
+        const shared = c.action === 'jump' || c.action === 'attack';   // keep the motion between frames
+        const first = boxes.findIndex(b => b);
+        const baseBottom = oh * (1 - pad);
+        cells.forEach((cell, i) => {
+          const ox = (i % c.cols) * ow, oy = Math.floor(i / c.cols) * oh, b = boxes[i];
+          if (!cell || !b) {
+            if (st.refCanvas) drawCell(ctx, ref, ox, oy, ow, oh, i, c.n, false);   // failed frame: plain reference
+            return;
+          }
+          if (!c.norm) { ctx.drawImage(cell, 0, 0, cell.width, cell.height, ox, oy, ow, oh); return; }
+          let k, left, bottom;
+          if (shared) {
+            const b0 = boxes[first];
+            k = km;
+            left = ow / 2 - b0.w * k / 2 + (b.x - b0.x) * k;
+            bottom = baseBottom + (b.y + b.h - (b0.y + b0.h)) * k;
+          } else {
+            k = clamp(ks[i], km * 0.75, km * 1.3);
+            k = Math.min(k, ow * 0.98 / b.w, oh * 0.98 / b.h);
+            left = ow / 2 - b.w * k / 2;
+            bottom = baseBottom;
+          }
+          ctx.drawImage(cell, b.x, b.y, b.w, b.h, ox + left, oy + bottom - b.h * k, b.w * k, b.h * k);
+        });
+        return out;
       }
 
       // ---------- AI Horde ----------
@@ -902,7 +1383,7 @@
       }
 
       function baseBody(c, prompt, w, h, seed) {
-        const params = { width: w, height: h, steps: c.steps, n: 1, sampler_name: 'k_euler', cfg_scale: c.cfgScale };
+        const params = { width: w, height: h, steps: c.steps, n: c.cands, sampler_name: 'k_euler', cfg_scale: c.cfgScale, karras: true };
         if (seed) params.seed = String(seed);
         return {
           prompt: prompt + ' ### ' + (c.neg || 'blurry, deformed, text, watermark'),
@@ -913,15 +1394,17 @@
           r2: true
         };
       }
-      function attachRef(body, srcCanvas, c) {
+      function attachRef(body, srcCanvas, c, lock) {
         body.source_image = canvasToB64(srcCanvas);
         body.source_processing = 'img2img';
         body.params.denoising_strength = c.denoise;
+        if (lock && c.lock !== 'none') body.params.control_type = c.lock;
       }
 
-      async function hordeJob(body, key, signal, onUpdate) {
+      // Returns every (uncensored) image the job produced.
+      async function hordeJob(body, key, signal, onUpdate, maxMs = 12 * 60 * 1000) {
         const apikey = key || ANON_KEY;
-        const headers = { 'Content-Type': 'application/json', apikey, 'Client-Agent': 'SpriteSheetWorkbench:2.0:unknown' };
+        const headers = { 'Content-Type': 'application/json', apikey, 'Client-Agent': 'SpriteSheetWorkbench:3.0:unknown' };
         let id = null;
         for (let attempt = 0; attempt < 40 && !id; attempt++) {
           const res = await fetch(HORDE_URL + '/generate/async', { method: 'POST', headers, body: JSON.stringify(body), signal });
@@ -935,11 +1418,12 @@
         }
         if (!id) throw new Error('Could not submit the job – the Horde kept rate-limiting this browser');
         st.activeIds.add(id);
+        let finished = false;
         try {
           const t0 = Date.now();
           for (;;) {
             await sleep(3000, signal);
-            if (Date.now() - t0 > 12 * 60 * 1000) throw new Error('Timed out waiting for AI Horde');
+            if (Date.now() - t0 > maxMs) throw new Error('Timed out waiting for AI Horde');
             const r = await fetch(HORDE_URL + '/generate/check/' + id, { headers: { apikey }, signal });
             if (r.status === 429) continue;
             if (!r.ok) throw new Error(`Status check failed (${r.status})`);
@@ -950,16 +1434,31 @@
               ? 'A worker is generating your image…'
               : `In queue – position ${d.queue_position != null ? d.queue_position : '?'}, about ${d.wait_time != null ? d.wait_time : '?'}s`);
           }
+          finished = true;
           const sr = await fetch(HORDE_URL + '/generate/status/' + id, { headers: { apikey }, signal });
           if (!sr.ok) throw new Error(`Could not fetch result (${sr.status})`);
           const sd = await sr.json();
-          const g = sd.generations && sd.generations[0];
-          if (!g || !g.img) throw new Error('No image returned');
-          if (g.censored) throw new Error('The Horde censored this image – try a different reference or description');
-          return g;
+          const all = (sd.generations || []).filter(g => g && g.img);
+          const ok = all.filter(g => !g.censored);
+          if (!ok.length) throw new Error(all.length ? 'The Horde censored this image – try a different reference or description' : 'No image returned');
+          return ok;
         } finally {
           st.activeIds.delete(id);
+          if (!finished) fetch(HORDE_URL + '/generate/status/' + id, { method: 'DELETE', headers: { apikey } }).catch(() => {});
         }
+      }
+
+      // Try with the ControlNet shape lock first; if the Horde cannot do it, fall back to plain img2img.
+      async function submitRef(c, build, signal, onUpdate) {
+        if (st.refCanvas && c.lock !== 'none' && !st.lockOff) {
+          try { return await hordeJob(build(true), c.key, signal, onUpdate, 6 * 60 * 1000); }
+          catch (e) {
+            if (e.name === 'AbortError') throw e;
+            st.lockOff = true; st.lockFailed = true;
+            onUpdate && onUpdate('Shape lock unavailable – retrying with plain img2img…');
+          }
+        }
+        return hordeJob(build(false), c.key, signal, onUpdate);
       }
 
       async function loadGenImage(g, signal) {
@@ -1116,31 +1615,60 @@
 
       async function runSheet(c, signal) {
         const { W, H } = sheetGeometry(c);
-        const body = baseBody(c, sheetPrompt(c), W, H, c.seed);
-        if (st.refCanvas) attachRef(body, buildSheetTemplate(c), c);
+        const prompt = sheetPrompt(c);
+        const tpl = st.refCanvas ? buildSheetTemplate(c) : null;
+        const build = lock => {
+          const body = baseBody(c, prompt, W, H, c.seed);
+          if (tpl) attachRef(body, tpl, c, lock);
+          return body;
+        };
         setBar(12);
         say(st.refCanvas ? 'Submitting your reference to AI Horde…' : 'No reference loaded – generating from the text prompt only…');
-        const g = await hordeJob(body, c.key, signal, msg => say(msg));
-        setBar(90);
-        const img = await loadGenImage(g, signal);
-        const cw = Math.floor(img.naturalWidth / c.cols), ch = Math.floor(img.naturalHeight / c.rows);
-        const cv = document.createElement('canvas');
-        cv.width = cw * c.cols; cv.height = ch * c.rows;
-        const ctx = cv.getContext('2d');
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, cv.width, cv.height);
-        setResult({ canvas: cv, cols: c.cols, rows: c.rows, cw, ch, seed: g.seed, tainted: img._tainted });
+        const gens = await submitRef(c, build, signal, msg => say(msg));
+        setBar(80);
+        const imgs = [];
+        for (const g of gens) imgs.push(await loadGenImage(g, signal));
+        const tainted = imgs.some(im => im._tainted);
+        const cw = Math.floor(imgs[0].naturalWidth / c.cols), ch = Math.floor(imgs[0].naturalHeight / c.rows);
+
+        let out = null, seed = gens[0].seed;
+        if (st.refCanvas && !tainted) {
+          try {
+            setBar(88);
+            say(imgs.length > 1 ? `Comparing ${imgs.length} candidates with your reference…` : 'Matching the result to your reference…');
+            const mask = buildSheetTemplate(c, true);
+            let best = null, bs = -1, bi = 0;
+            imgs.forEach((im, idx) => {
+              const cells = sliceKeyed(im, c, cw, ch);
+              const s = scoreCand(assembleSheet(cells, c, cw, ch), mask);
+              if (s > bs) { bs = s; best = cells; bi = idx; }
+            });
+            out = finalizeCells(best, c, cw, ch);
+            seed = gens[bi].seed;
+          } catch (e) { console.error(e); out = null; }
+        }
+        if (!out) {
+          out = document.createElement('canvas');
+          out.width = cw * c.cols; out.height = ch * c.rows;
+          const ctx = out.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(imgs[0], 0, 0, imgs[0].naturalWidth, imgs[0].naturalHeight, 0, 0, out.width, out.height);
+        }
+        setResult({ canvas: out, cols: c.cols, rows: c.rows, cw, ch, seed, tainted });
         setBar(100);
-        say(img._tainted
-          ? 'Done, but the browser blocked pixel access to the image (CORS) – slicing and downloading from here may not work.'
-          : 'Done! Check the animation preview, then download or send it to the Slice tab.', img._tainted ? 'err' : 'ok');
+        say(tainted
+          ? 'Done, but the browser blocked pixel access to the image (CORS) – matching, slicing and downloading from here may not work.' + lockNote()
+          : 'Done! Check the animation preview, then download or send it to the Slice tab.' + lockNote(), tainted ? 'err' : 'ok');
       }
 
       async function runFrames(c, signal) {
         const n = c.n;
+        const poseMode = c.mode === 'pose';
         const seed = c.seed || String(Math.floor(Math.random() * 1e9));
-        const imgs = new Array(n).fill(null);
+        const rawImgs = new Array(n).fill(null);
+        const cells = new Array(n).fill(null);
         const errs = [];
+        let tainted = false, procFail = false;
         buildChips(n);
         let next = 0, done = 0;
         setBar(8);
@@ -1155,10 +1683,33 @@
             let ok = false, lastErr = null;
             for (let t = 0; t < 3 && !ok; t++) {
               try {
-                const body = baseBody(c, framePrompt(c, i), c.size, c.size, seed);
-                if (st.refCanvas) attachRef(body, buildFrameTemplate(c, i), c);
-                const g = await hordeJob(body, c.key, signal, msg => setChip(i, 'run', msg));
-                imgs[i] = await loadGenImage(g, signal);
+                const prompt = framePrompt(c, i);
+                const tpl = !poseMode && st.refCanvas ? buildFrameTemplate(c, i) : null;
+                const build = lock => {
+                  const body = baseBody(c, prompt, c.size, c.size, seed);
+                  if (poseMode) attachPose(body, c, i);
+                  else if (tpl) attachRef(body, tpl, c, lock);
+                  return body;
+                };
+                const gens = poseMode
+                  ? await hordeJob(build(), c.key, signal, msg => setChip(i, 'run', msg), 10 * 60 * 1000)
+                  : await submitRef(c, build, signal, msg => setChip(i, 'run', msg));
+                const ims = [];
+                for (const g of gens) ims.push(await loadGenImage(g, signal));
+                rawImgs[i] = ims[0];
+                if (ims.some(im => im._tainted)) tainted = true;
+                else if (st.refCanvas || poseMode) {
+                  try {
+                    const mask = poseMode ? null : buildFrameTemplate(c, i, true);
+                    let best = null, bs = -1;
+                    for (const im of ims) {
+                      const kc = keyCell(imgToCanvas(im), c);
+                      const s = poseMode ? poseScore(kc) : scoreCand(kc, mask);
+                      if (s > bs) { bs = s; best = kc; }
+                    }
+                    cells[i] = best;
+                  } catch (e) { console.error(e); procFail = true; }
+                }
                 ok = true;
               } catch (e) {
                 if (e.name === 'AbortError') throw e;
@@ -1174,21 +1725,26 @@
         };
         await Promise.all(Array.from({ length: Math.min(c.conc, n) }, worker));
 
-        const cell = c.cell;
-        const cv = newBgCanvas(cell * c.cols, cell * c.rows, c.bg);
-        const ctx = cv.getContext('2d');
-        imgs.forEach((im, i) => {
-          const x = (i % c.cols) * cell, y = Math.floor(i / c.cols) * cell;
-          if (im) ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, y, cell, cell);
-          else if (st.refCanvas) drawCell(ctx, st.refCanvas, x, y, cell, cell, i, n, false);
-        });
-        const tainted = imgs.some(im => im && im._tainted);
         if (errs.length === n) throw new Error('Every frame failed. First error – ' + errs[0]);
+        const cell = c.cell;
+        let cv;
+        if ((st.refCanvas || poseMode) && !tainted && !procFail) {
+          say(st.refCanvas ? 'Matching frames to your reference…' : 'Tidying up the frames…');
+          cv = finalizeCells(cells, c, cell, cell);
+        } else {
+          cv = newBgCanvas(cell * c.cols, cell * c.rows, c.bg);
+          const ctx = cv.getContext('2d');
+          rawImgs.forEach((im, i) => {
+            const x = (i % c.cols) * cell, y = Math.floor(i / c.cols) * cell;
+            if (im) ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, y, cell, cell);
+            else if (st.refCanvas) drawCell(ctx, st.refCanvas, x, y, cell, cell, i, n, false);
+          });
+        }
         setResult({ canvas: cv, cols: c.cols, rows: c.rows, cw: cell, ch: cell, seed, tainted });
         setBar(100);
-        if (errs.length) say(`Done, but ${errs.length} frame(s) failed and were filled with the plain reference: ${errs.join(' | ')}`, 'err');
-        else if (tainted) say('Done, but the browser blocked pixel access to the images (CORS) – slicing and downloading may not work.', 'err');
-        else say('Done! Check the animation preview, then download or send it to the Slice tab.', 'ok');
+        if (errs.length) say(`Done, but ${errs.length} frame(s) failed and were filled with the plain reference: ${errs.join(' | ')}` + lockNote(), 'err');
+        else if (tainted) say('Done, but the browser blocked pixel access to the images (CORS) – matching, slicing and downloading may not work.' + lockNote(), 'err');
+        else say('Done! Check the animation preview, then download or send it to the Slice tab.' + lockNote(), 'ok');
       }
 
       function setRunning(on) {
@@ -1204,6 +1760,7 @@
         const c = cfg();
         try { localStorage.setItem('hordeKey', c.key); } catch (e) {}
         st.abort = new AbortController();
+        st.lockOff = false; st.lockFailed = false;
         setRunning(true);
         $('frameChips').innerHTML = '';
         setBar(5);
@@ -1263,7 +1820,7 @@
       }
 
       function prepareRef() {
-        if (!st.refImg) { st.refCanvas = null; scheduleUpdate(); return; }
+        if (!st.refImg) { st.refCanvas = null; analyzeRef(); scheduleUpdate(); return; }
         const im = st.refImg;
         const s = Math.min(1, 1024 / Math.max(im.naturalWidth, im.naturalHeight));
         const cv = document.createElement('canvas');
@@ -1275,6 +1832,7 @@
           try { floodKey(cv, 60); } catch (e) {}
         }
         st.refCanvas = trimCanvas(cv);
+        analyzeRef();
         scheduleUpdate();
       }
 
@@ -1288,7 +1846,7 @@
       $('refInput').addEventListener('change', () => { if ($('refInput').files[0]) handleRef($('refInput').files[0]); });
       $('refKey').addEventListener('change', prepareRef);
       $('refClear').addEventListener('click', () => {
-        st.refImg = null; st.refCanvas = null;
+        st.refImg = null; st.refCanvas = null; analyzeRef();
         refZone.innerHTML = '<div class="hint">Drop or click to upload your character<br><small>PNG / JPG / WebP · plain or transparent background works best</small></div>';
         const input = document.createElement('input');
         input.type = 'file'; input.accept = 'image/*'; input.id = 'refInput';
@@ -1300,14 +1858,19 @@
 
       // ---------- live preview of what will be sent ----------
       function updateModeUI() {
-        const m = $('gMode').value, ai = m !== 'proc';
+        const m = $('gMode').value, ai = m !== 'proc', pose = m === 'pose';
         $('cellWrap').style.display = m === 'sheet' ? 'none' : '';
         $('sizeWrap').style.display = ai ? '' : 'none';
-        $('denoiseWrap').style.display = ai ? '' : 'none';
+        $('denoiseWrap').style.display = ai && !pose ? '' : 'none';   // new-pose mode has no image to repaint
+        $('lockWrap').style.display = pose ? 'none' : '';
         $('procOpts').style.display = ai ? 'none' : '';
-        $('gSizeLabel').textContent = m === 'frames' ? 'Frame generation size (px)' : 'Generation size (px, long side)';
-        if (!st.denoiseTouched) $('gDenoise').value = m === 'frames' ? '0.5' : '0.55';
+        $('aiOpts').style.display = ai ? '' : 'none';
+        $('gSizeLabel').textContent = m === 'sheet' ? 'Generation size (px, long side)' : 'Frame generation size (px)';
+        // With a shape lock the outline is held by ControlNet, so a little more variation is safe.
+        if (!st.denoiseTouched) $('gDenoise').value = $('gLock').value !== 'none' ? '0.6' : (m === 'frames' ? '0.45' : '0.5');
         $('gDenoiseVal').textContent = parseFloat($('gDenoise').value).toFixed(2);
+        $('gColorStrVal').textContent = parseFloat($('gColorStr').value).toFixed(2);
+        $('gColorStr').disabled = $('gColor').value === 'off';
       }
 
       function updatePreview() {
@@ -1315,13 +1878,23 @@
         const c = cfg();
         const proc = c.mode === 'proc';
         const box = $('tplPreview');
-        $('tplTitle').innerHTML = proc ? 'Cutout used for the animation <span>preview</span>' : 'Template sent to the AI <span>preview</span>';
+        $('tplTitle').innerHTML = proc ? 'Cutout used for the animation <span>preview</span>' : c.mode === 'pose' ? 'Pose of each frame, sent to the AI <span>preview</span>' : 'Template sent to the AI <span>preview</span>';
         $('promptPreview').textContent = proc ? '' : 'Prompt: ' + (c.mode === 'sheet' ? sheetPrompt(c) : framePrompt(c, 0));
+        const mult = 1 + (c.cands - 1) * 0.6;
         $('genEstimate').textContent = proc
           ? 'Builds instantly in your browser from the cutout. No AI, so your character stays exactly as drawn and the sheet has a transparent background.'
+          : c.mode === 'pose'
+            ? `AI new poses: ${c.n} jobs, each drawn from its own pose skeleton (roughly ${Math.max(2, Math.round(c.n * 45 * mult / c.conc / 60))}–${Math.max(4, Math.round(c.n * 90 * mult / c.conc / 60))} minutes on the free queue). Every frame is a brand-new image, so the character comes from your description and the reference's colours rather than being copied from the picture – describe it in detail for the best consistency.`
           : c.mode === 'sheet'
-            ? 'AI whole sheet: 1 job, usually 30–120 seconds on the free queue. The AI redraws every cell, so expect drift between frames.'
-            : `AI frame by frame: ${c.n} jobs, roughly ${Math.max(2, Math.round(c.n * 45 / c.conc / 60))}–${Math.max(4, Math.round(c.n * 90 / c.conc / 60))} minutes on the free queue.`;
+            ? `AI whole sheet: 1 job with ${c.cands} candidate${c.cands > 1 ? 's' : ''}, usually ${Math.round(30 * mult)}–${Math.round(120 * mult)} seconds on the free queue. Cells are re-fitted to your reference afterwards.`
+            : `AI frame by frame: ${c.n} jobs, roughly ${Math.max(2, Math.round(c.n * 45 * mult / c.conc / 60))}–${Math.max(4, Math.round(c.n * 90 * mult / c.conc / 60))} minutes on the free queue.`;
+        if (c.mode === 'pose') {                       // show the pose of every frame
+          const sheet = buildPoseSheet(c);
+          sheet.style.width = 'min(100%, 340px)';
+          box.innerHTML = '';
+          box.appendChild(sheet);
+          return;
+        }
         if (!st.refCanvas) {
           box.innerHTML = '<span style="color:var(--muted);font-size:0.9rem">Upload a reference to see the preview</span>';
           return;
