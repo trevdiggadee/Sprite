@@ -485,7 +485,7 @@
               </div>
               <div>
                 <label for="gCands">Candidates per image</label>
-                <input type="number" id="gCands" value="2" min="1" max="4" />
+                <input type="number" id="gCands" value="1" min="1" max="4" />
               </div>
             </div>
             <div class="row">
@@ -542,7 +542,7 @@
                 <input type="text" id="gKey" placeholder="anonymous" autocomplete="off" />
               </div>
             </div>
-            <p class="note">A free AI Horde account key gets you a shorter queue. It is only stored in this browser.</p>
+            <p class="note">A free AI Horde account key gets you a shorter queue, and anonymous keys can't pay for costly jobs (several candidates, high steps or size) – those are cut down automatically. It is only stored in this browser.</p>
           </details>
 
           <div style="display:flex;gap:8px;margin-top:14px">
@@ -736,7 +736,8 @@
       };
       const setBar = pct => { $('genBar').style.width = pct + '%'; };
       const say = (msg, type = '') => setStatus('genStatus', msg, type);
-      const lockNote = () => st.lockFailed ? ' (Shape lock was unavailable on the Horde, so plain img2img was used.)' : '';
+      const lockNote = () => (st.lockFailed ? ' (Shape lock was unavailable on the Horde, so plain img2img was used.)' : '')
+        + (st.degraded ? ' (Jobs were made cheaper to fit the anonymous kudos limit: fewer candidates and steps.)' : '');
 
       // ---------- prompt building ----------
       const ACTIONS = {
@@ -1414,7 +1415,22 @@
             await sleep(6000, signal);
             continue;
           }
-          throw new Error(`Submit failed (${res.status}): ${await errText(res)}`);
+          const msg = await errText(res);
+          if (res.status === 403 && /kudos/i.test(msg)) {
+            // Anonymous keys can only spend a small budget: make the job cheaper and try again.
+            if (body.params.n > 1) {
+              body.params.n = 1; st.degraded = true;
+              onUpdate && onUpdate('Too costly without kudos – retrying with 1 candidate…');
+              continue;
+            }
+            if (body.params.steps > 16) {
+              body.params.steps = 16; st.degraded = true;
+              onUpdate && onUpdate('Still too costly – retrying with fewer steps…');
+              continue;
+            }
+            throw new Error(`Submit failed (403): ${msg} Try a smaller generation size, or add a free AI Horde API key under Advanced.`);
+          }
+          throw new Error(`Submit failed (${res.status}): ${msg}`);
         }
         if (!id) throw new Error('Could not submit the job – the Horde kept rate-limiting this browser');
         st.activeIds.add(id);
@@ -1760,7 +1776,7 @@
         const c = cfg();
         try { localStorage.setItem('hordeKey', c.key); } catch (e) {}
         st.abort = new AbortController();
-        st.lockOff = false; st.lockFailed = false;
+        st.lockOff = false; st.lockFailed = false; st.degraded = false;
         setRunning(true);
         $('frameChips').innerHTML = '';
         setBar(5);
