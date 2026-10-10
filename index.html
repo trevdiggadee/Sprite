@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Sprite Sheet Generator – 16 Frames</title>
-  <script src="https://js.puter.com/v2/"></script>
+  <title>AI Sprite Sheet Generator – Free Pixel Art</title>
   <style>
     :root {
       --bg: #0f1115;
@@ -35,10 +34,10 @@
     }
     header {
       text-align: center;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
     }
     header h1 {
-      font-size: 1.85rem;
+      font-size: 1.75rem;
       font-weight: 700;
       letter-spacing: -0.02em;
       background: linear-gradient(135deg, #a78bfa, #7c5cff, #60a5fa);
@@ -49,7 +48,18 @@
     header p {
       color: var(--muted);
       margin-top: 6px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
+    }
+    .free-badge {
+      display: inline-block;
+      background: rgba(52, 211, 153, 0.15);
+      color: #6ee7b7;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-top: 8px;
+      border: 1px solid rgba(52, 211, 153, 0.3);
     }
     .grid {
       display: grid;
@@ -121,17 +131,17 @@
     .upload-zone {
       border: 2px dashed var(--border);
       border-radius: 10px;
-      padding: 20px;
+      padding: 18px;
       text-align: center;
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
       position: relative;
-      min-height: 120px;
+      min-height: 110px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
     }
     .upload-zone:hover,
     .upload-zone.dragover {
@@ -140,12 +150,12 @@
     }
     .upload-zone img {
       max-width: 100%;
-      max-height: 140px;
+      max-height: 130px;
       border-radius: 6px;
       object-fit: contain;
     }
     .upload-zone .hint {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--muted);
     }
     .upload-zone input[type="file"] {
@@ -189,12 +199,6 @@
       background: var(--success);
       color: #064e3b;
     }
-    .btn-group {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
     .status {
       margin-top: 12px;
       padding: 10px 12px;
@@ -223,21 +227,19 @@
     .preview-area {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
     }
     .sheet-preview {
       background: #0a0c10;
       border-radius: 10px;
       border: 1px solid var(--border);
-      min-height: 220px;
+      min-height: 200px;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: auto;
-      position: relative;
     }
-    .sheet-preview img,
-    .sheet-preview canvas {
+    .sheet-preview img {
       max-width: 100%;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
@@ -246,11 +248,10 @@
       background: #0a0c10;
       border-radius: 10px;
       border: 1px solid var(--border);
-      height: 180px;
+      height: 170px;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
     }
     .anim-preview canvas {
       image-rendering: pixelated;
@@ -259,19 +260,15 @@
     .controls-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       font-size: 0.85rem;
       color: var(--muted);
     }
-    .controls-row label {
-      display: inline;
-      margin: 0 4px 0 0;
-    }
+    .controls-row label { display: inline; margin: 0 4px 0 0; }
     .meta {
       font-size: 0.8rem;
       color: var(--muted);
-      margin-top: 8px;
     }
     .tabs {
       display: flex;
@@ -324,7 +321,8 @@
   <div class="container">
     <header>
       <h1>AI Sprite Sheet Generator</h1>
-      <p>Prompt + optional reference image → 16-frame game-ready sprite sheet (free AI)</p>
+      <p>Pixel-art sprite sheets from prompt + optional reference</p>
+      <div class="free-badge">100% Free · No account · No balance required</div>
     </header>
 
     <div class="tabs">
@@ -332,22 +330,21 @@
       <div class="tab" data-tab="pack">Pack Frames</div>
     </div>
 
-    <!-- ========== AI GENERATE TAB ========== -->
+    <!-- AI GENERATE -->
     <div class="tab-content active" id="tab-ai">
       <div class="grid">
-        <!-- Left: Controls -->
         <div class="card">
-          <h2>1. Describe & Reference <span>AI</span></h2>
+          <h2>1. Prompt & Settings <span>Free</span></h2>
 
           <div class="full" style="margin-bottom:14px">
             <label for="prompt">Prompt</label>
-            <textarea id="prompt" placeholder="e.g. a cute orange cat knight in armor, side view, pixel art style, walking cycle, transparent background, consistent character across all frames">a cute orange cat knight wearing silver armor, side-view platformer character, pixel art, 16-frame walk cycle, clean transparent background, consistent design across frames, game sprite</textarea>
+            <textarea id="prompt" placeholder="Describe the character and action...">cartoon gorilla ape character, brown fur, side view platformer, pixel art style, 16-frame walk cycle, clean green screen background, consistent design, game sprite sheet</textarea>
           </div>
 
           <div class="full" style="margin-bottom:14px">
-            <label>Reference Image (optional)</label>
+            <label>Reference Image (optional – helps style matching)</label>
             <div class="upload-zone" id="refZone">
-              <div class="hint">Drop or click to upload reference<br><small>PNG / JPG / WebP – helps keep character consistent</small></div>
+              <div class="hint">Drop or click to upload reference<br><small>Used to guide the prompt description</small></div>
               <input type="file" id="refInput" accept="image/*" />
             </div>
           </div>
@@ -368,7 +365,7 @@
                 <option value="4x4" selected>4 × 4</option>
                 <option value="8x2">8 × 2</option>
                 <option value="2x8">2 × 8</option>
-                <option value="4x2">4 × 2 (8 frames)</option>
+                <option value="4x2">4 × 2</option>
                 <option value="1x16">1 × 16 strip</option>
               </select>
             </div>
@@ -378,86 +375,78 @@
             <div>
               <label for="style">Art Style</label>
               <select id="style">
-                <option value="pixel art, 32x32 style, clean pixels">Pixel Art</option>
-                <option value="cartoon, clean lines, vibrant">Cartoon</option>
-                <option value="anime style, cel shaded">Anime</option>
-                <option value="hand-painted, soft shading">Hand-painted</option>
-                <option value="chibi, cute proportions">Chibi</option>
+                <option value="pixel art, 32x32 style, clean hard pixels, limited color palette, no anti-aliasing" selected>Pixel Art (strong)</option>
+                <option value="pixel art, retro 16-bit style">Pixel Art 16-bit</option>
+                <option value="chibi pixel art, cute proportions">Chibi Pixel</option>
+                <option value="cartoon, clean lines">Cartoon</option>
               </select>
             </div>
             <div>
               <label for="action">Animation</label>
               <select id="action">
-                <option value="walk cycle, side view, looping">Walk Cycle</option>
-                <option value="idle animation, subtle breathing">Idle</option>
-                <option value="run cycle, fast motion">Run</option>
-                <option value="attack slash, action pose sequence">Attack</option>
-                <option value="jump, up and down motion">Jump</option>
-                <option value="custom (use prompt)">Custom</option>
+                <option value="walk cycle, side view, looping, clear foot movement">Walk Cycle</option>
+                <option value="idle animation, subtle breathing and slight sway">Idle</option>
+                <option value="run cycle, fast motion, dynamic pose">Run</option>
+                <option value="attack slash or punch sequence">Attack</option>
+                <option value="jump up and down motion">Jump</option>
+                <option value="">Custom (use only your prompt)</option>
               </select>
             </div>
           </div>
 
           <div class="row">
             <div>
-              <label for="model">AI Model (Puter)</label>
-              <select id="model">
-                <option value="default">Default (recommended)</option>
-                <option value="openai/gpt-image-2.5-flare">GPT Image 2.5 Flare</option>
-                <option value="google/gemini-3-pro-image">Gemini / Nano Banana</option>
-                <option value="xai/grok-2-image">Grok Image</option>
-                <option value="cloudflare/flux-1-schnell">FLUX Schnell (fast)</option>
+              <label for="size">Sheet Size</label>
+              <select id="size">
+                <option value="1024">1024 × 1024</option>
+                <option value="768" selected>768 × 768 (faster)</option>
+                <option value="512">512 × 512</option>
               </select>
             </div>
             <div>
-              <label for="backend">Backend</label>
-              <select id="backend">
-                <option value="puter" selected>Puter.js (best quality + ref image)</option>
-                <option value="pollinations">Pollinations (no login, simple)</option>
-              </select>
+              <label for="seed">Seed (optional)</label>
+              <input type="number" id="seed" placeholder="random" />
             </div>
           </div>
 
-          <button class="btn btn-primary" id="generateBtn" style="margin-top:8px">
-            Generate 16-Frame Sprite Sheet
+          <button class="btn btn-primary" id="generateBtn" style="margin-top:6px">
+            Generate Free Sprite Sheet
           </button>
           <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
           <div class="status" id="status"></div>
           <p class="note">
-            Puter.js is free for the developer (you). Users may need a free Puter account for generation (user-pays model). 
-            Pollinations works without login but has stricter rate limits and weaker reference-image support.
-            Best results: generate a single sheet image with a strong “sprite sheet grid” prompt.
+            Uses Pollinations free endpoint (no login, no payment). Rate limits may apply (~1 image every 10–15 s). 
+            For perfect match to a reference image, upload it here in chat and I can generate it with Grok Imagine instead.
           </p>
         </div>
 
-        <!-- Right: Preview -->
         <div class="card preview-area">
           <h2>2. Result & Preview</h2>
           <div class="sheet-preview" id="sheetPreview">
-            <span style="color:var(--muted);font-size:0.9rem">Generated sheet will appear here</span>
+            <span style="color:var(--muted);font-size:0.9rem">Generated sheet appears here</span>
           </div>
           <div class="anim-preview" id="animPreview">
             <span style="color:var(--muted);font-size:0.85rem">Animation preview</span>
           </div>
           <div class="controls-row">
-            <label>FPS <input type="number" id="fps" value="8" min="1" max="30" style="width:50px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px"></label>
+            <label>FPS <input type="number" id="fps" value="8" min="1" max="30" style="width:48px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px"></label>
             <button class="btn btn-secondary" id="playBtn" disabled>Play / Pause</button>
             <button class="btn btn-success" id="downloadBtn" disabled>Download PNG</button>
-            <button class="btn btn-secondary" id="downloadMetaBtn" disabled>JSON Meta</button>
+            <button class="btn btn-secondary" id="downloadMetaBtn" disabled>JSON</button>
           </div>
           <div class="meta" id="metaInfo"></div>
         </div>
       </div>
     </div>
 
-    <!-- ========== PACK FRAMES TAB ========== -->
+    <!-- PACK TAB -->
     <div class="tab-content" id="tab-pack">
       <div class="grid">
         <div class="card">
           <h2>Pack Existing Frames</h2>
-          <p class="note" style="margin-bottom:12px">Upload individual frame images (in order). They will be packed into a sprite sheet.</p>
-          <div class="upload-zone" id="framesZone" style="min-height:160px">
-            <div class="hint">Drop or click to upload multiple frames<br><small>Order matters – name them 01, 02… or select in sequence</small></div>
+          <p class="note" style="margin-bottom:12px">Upload individual frame images in order. They will be packed into one sprite sheet.</p>
+          <div class="upload-zone" id="framesZone" style="min-height:150px">
+            <div class="hint">Drop or click multiple frames<br><small>Order matters</small></div>
             <input type="file" id="framesInput" accept="image/*" multiple />
           </div>
           <div class="row" style="margin-top:14px">
@@ -481,12 +470,12 @@
         <div class="card preview-area">
           <h2>Packed Result</h2>
           <div class="sheet-preview" id="packPreview">
-            <span style="color:var(--muted);font-size:0.9rem">Packed sheet will appear here</span>
+            <span style="color:var(--muted);font-size:0.9rem">Packed sheet appears here</span>
           </div>
           <div class="anim-preview" id="packAnimPreview">
             <span style="color:var(--muted);font-size:0.85rem">Animation preview</span>
           </div>
-          <div class="btn-group">
+          <div style="display:flex;gap:10px;margin-top:8px">
             <button class="btn btn-success" id="packDownloadBtn" disabled>Download PNG</button>
             <button class="btn btn-secondary" id="packPlayBtn" disabled>Play / Pause</button>
           </div>
@@ -496,7 +485,7 @@
   </div>
 
   <script>
-    // ========== TAB SWITCHING ==========
+    // Tabs
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -506,19 +495,17 @@
       });
     });
 
-    // ========== STATE ==========
     let refImageDataUrl = null;
     let currentSheetCanvas = null;
-    let currentFrames = []; // array of Image or canvas for animation
+    let currentFrames = [];
     let animPlaying = false;
     let animFrame = 0;
     let animTimer = null;
     let sheetMeta = null;
 
-    // ========== REFERENCE UPLOAD ==========
+    // Reference upload
     const refZone = document.getElementById('refZone');
     const refInput = document.getElementById('refInput');
-
     refZone.addEventListener('dragover', e => { e.preventDefault(); refZone.classList.add('dragover'); });
     refZone.addEventListener('dragleave', () => refZone.classList.remove('dragover'));
     refZone.addEventListener('drop', e => {
@@ -526,9 +513,7 @@
       refZone.classList.remove('dragover');
       if (e.dataTransfer.files[0]) handleRefFile(e.dataTransfer.files[0]);
     });
-    refInput.addEventListener('change', () => {
-      if (refInput.files[0]) handleRefFile(refInput.files[0]);
-    });
+    refInput.addEventListener('change', () => { if (refInput.files[0]) handleRefFile(refInput.files[0]); });
 
     function handleRefFile(file) {
       if (!file.type.startsWith('image/')) return;
@@ -536,11 +521,9 @@
       reader.onload = e => {
         refImageDataUrl = e.target.result;
         refZone.innerHTML = `<img src="${refImageDataUrl}" alt="Reference" /><div class="hint">Click or drop to replace</div>`;
-        // re-add input
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.id = 'refInput';
         input.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer';
         input.addEventListener('change', () => { if (input.files[0]) handleRefFile(input.files[0]); });
         refZone.appendChild(input);
@@ -548,31 +531,26 @@
       reader.readAsDataURL(file);
     }
 
-    // ========== BUILD PROMPT ==========
     function buildFullPrompt() {
       const base = document.getElementById('prompt').value.trim();
       const frames = document.getElementById('frames').value;
       const layout = document.getElementById('layout').value;
       const style = document.getElementById('style').value;
       const action = document.getElementById('action').value;
-
       const [cols, rows] = layout.split('x').map(Number);
-      const gridDesc = `${cols} columns by ${rows} rows`;
 
-      let full = `${base}, ${style}, ${action}, `;
-      full += `exactly ${frames} frames arranged in a clean ${gridDesc} sprite sheet grid, `;
-      full += `each frame the same size, character centered in every cell, transparent or solid green screen background, `;
-      full += `no text, no labels, no numbers, consistent character design and proportions across all frames, game-ready sprite sheet`;
+      let full = base;
+      if (style) full += `, ${style}`;
+      if (action) full += `, ${action}`;
+      full += `, exactly ${frames} frames in a clean ${cols}x${rows} grid sprite sheet, each frame same size, character centered in every cell, solid bright green chroma key background #00FF00, no text, no labels, no numbers, consistent character proportions and colors across all frames, game-ready pixel sprite sheet`;
       return full;
     }
 
-    // ========== STATUS ==========
     function setStatus(msg, type = 'info') {
       const el = document.getElementById('status');
       el.textContent = msg;
       el.className = 'status ' + type;
     }
-
     function setProgress(pct) {
       const wrap = document.getElementById('progress');
       const bar = document.getElementById('progressBar');
@@ -581,56 +559,37 @@
       bar.style.width = pct + '%';
     }
 
-    // ========== GENERATE ==========
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load image. Rate limit or network issue – wait 15s and try again.'));
+        img.src = src;
+      });
+    }
+
     document.getElementById('generateBtn').addEventListener('click', async () => {
       const btn = document.getElementById('generateBtn');
       btn.disabled = true;
-      setStatus('Preparing generation…', 'info');
-      setProgress(10);
+      setStatus('Building free request to Pollinations…', 'info');
+      setProgress(15);
 
-      const backend = document.getElementById('backend').value;
       const fullPrompt = buildFullPrompt();
-      const model = document.getElementById('model').value;
+      const size = parseInt(document.getElementById('size').value, 10) || 768;
+      const seedVal = document.getElementById('seed').value;
+      const seed = seedVal ? parseInt(seedVal, 10) : Math.floor(Math.random() * 999999);
+
+      // Pollinations free endpoint – no key required
+      let url = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=${size}&height=${size}&model=flux&nologo=true&enhance=true&seed=${seed}`;
 
       try {
-        let imgElement = null;
+        setStatus('Generating with free Pollinations model (may take 8–20 s)…', 'info');
+        setProgress(40);
 
-        if (backend === 'puter') {
-          setStatus('Calling Puter.js AI… (may prompt for Puter login)', 'info');
-          setProgress(30);
+        const imgElement = await loadImage(url);
+        setProgress(75);
 
-          const opts = {};
-          if (model && model !== 'default') opts.model = model;
-          if (refImageDataUrl) {
-            // Puter supports input_image as data URI or base64
-            opts.input_image = refImageDataUrl;
-            // mime type is usually auto-detected from data URI
-          }
-
-          // puter.ai.txt2img returns an HTMLImageElement
-          imgElement = await puter.ai.txt2img(fullPrompt, opts);
-          setProgress(80);
-        } else {
-          // Pollinations – simple GET, no reference support easily without hosting the image
-          setStatus('Calling Pollinations (no-login)…', 'info');
-          setProgress(40);
-          const encoded = encodeURIComponent(fullPrompt);
-          // Use a decent size for a 4x4 sheet
-          const url = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&enhance=true`;
-          imgElement = await loadImage(url);
-          setProgress(80);
-        }
-
-        if (!imgElement || !imgElement.complete) {
-          // wait for load if needed
-          await new Promise((res, rej) => {
-            if (imgElement.complete) return res();
-            imgElement.onload = res;
-            imgElement.onerror = rej;
-          });
-        }
-
-        // Draw to canvas so we can work with it
         const canvas = document.createElement('canvas');
         canvas.width = imgElement.naturalWidth || imgElement.width;
         canvas.height = imgElement.naturalHeight || imgElement.height;
@@ -644,10 +603,10 @@
           width: canvas.width,
           height: canvas.height,
           prompt: fullPrompt,
+          seed: seed,
           generated: new Date().toISOString()
         };
 
-        // Show sheet
         const preview = document.getElementById('sheetPreview');
         preview.innerHTML = '';
         const displayImg = document.createElement('img');
@@ -656,38 +615,26 @@
         displayImg.style.imageRendering = 'pixelated';
         preview.appendChild(displayImg);
 
-        // Prepare animation frames by slicing
         prepareAnimationFrames(canvas, sheetMeta.layout, sheetMeta.frames);
 
         document.getElementById('downloadBtn').disabled = false;
         document.getElementById('downloadMetaBtn').disabled = false;
         document.getElementById('playBtn').disabled = false;
         document.getElementById('metaInfo').textContent =
-          `${canvas.width}×${canvas.height} px · ${sheetMeta.frames} frames · ${sheetMeta.layout}`;
+          `${canvas.width}×${canvas.height} · ${sheetMeta.frames} frames · ${sheetMeta.layout} · seed ${seed}`;
 
         setProgress(100);
-        setStatus('Sprite sheet ready! Preview and download below.', 'success');
-        setTimeout(() => setProgress(0), 800);
+        setStatus('Done! Free sprite sheet ready. Play animation or download.', 'success');
+        setTimeout(() => setProgress(0), 600);
       } catch (err) {
         console.error(err);
-        setStatus('Error: ' + (err.message || err) + ' — Try Pollinations backend or check Puter login.', 'error');
+        setStatus('Error: ' + (err.message || err) + ' — Wait ~15 seconds and try again (free rate limit).', 'error');
         setProgress(0);
       } finally {
         btn.disabled = false;
       }
     });
 
-    function loadImage(src) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Failed to load image from URL'));
-        img.src = src;
-      });
-    }
-
-    // ========== SLICE FOR ANIMATION ==========
     function prepareAnimationFrames(sheetCanvas, layout, frameCount) {
       const [cols, rows] = layout.split('x').map(Number);
       const fw = Math.floor(sheetCanvas.width / cols);
@@ -705,13 +652,12 @@
         currentFrames.push(frameCanvas);
       }
 
-      // Draw first frame in anim preview
       const animEl = document.getElementById('animPreview');
       animEl.innerHTML = '';
       const previewCanvas = document.createElement('canvas');
       previewCanvas.width = fw;
       previewCanvas.height = fh;
-      previewCanvas.style.maxHeight = '160px';
+      previewCanvas.style.maxHeight = '150px';
       previewCanvas.style.imageRendering = 'pixelated';
       const pctx = previewCanvas.getContext('2d');
       if (currentFrames[0]) pctx.drawImage(currentFrames[0], 0, 0);
@@ -720,26 +666,23 @@
       window._animPreviewCtx = pctx;
     }
 
-    // ========== PLAY / PAUSE ==========
     document.getElementById('playBtn').addEventListener('click', () => {
       if (!currentFrames.length) return;
       animPlaying = !animPlaying;
       if (animPlaying) {
         const fps = parseInt(document.getElementById('fps').value, 10) || 8;
-        const interval = 1000 / fps;
         animTimer = setInterval(() => {
           animFrame = (animFrame + 1) % currentFrames.length;
           if (window._animPreviewCtx) {
             window._animPreviewCtx.clearRect(0, 0, window._animPreviewCanvas.width, window._animPreviewCanvas.height);
             window._animPreviewCtx.drawImage(currentFrames[animFrame], 0, 0);
           }
-        }, interval);
+        }, 1000 / fps);
       } else {
         clearInterval(animTimer);
       }
     });
 
-    // ========== DOWNLOAD ==========
     document.getElementById('downloadBtn').addEventListener('click', () => {
       if (!currentSheetCanvas) return;
       const a = document.createElement('a');
@@ -762,16 +705,14 @@
       const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `sprite-sheet-meta-${Date.now()}.json`;
+      a.download = `sprite-meta-${Date.now()}.json`;
       a.click();
     });
 
-    // ========== PACK FRAMES TAB ==========
+    // Pack tab
     let packFrameImages = [];
-
     const framesZone = document.getElementById('framesZone');
     const framesInput = document.getElementById('framesInput');
-
     framesZone.addEventListener('dragover', e => { e.preventDefault(); framesZone.classList.add('dragover'); });
     framesZone.addEventListener('dragleave', () => framesZone.classList.remove('dragover'));
     framesZone.addEventListener('drop', e => {
@@ -794,7 +735,7 @@
             packFrameImages[idx] = img;
             loaded++;
             if (loaded === files.length) {
-              framesZone.innerHTML = `<div class="hint">${files.length} frames loaded – ready to pack</div>`;
+              framesZone.innerHTML = `<div class="hint">${files.length} frames loaded</div>`;
               const input = document.createElement('input');
               input.type = 'file';
               input.accept = 'image/*';
@@ -812,7 +753,7 @@
 
     document.getElementById('packBtn').addEventListener('click', () => {
       if (!packFrameImages.length) {
-        document.getElementById('packStatus').textContent = 'Upload some frames first.';
+        document.getElementById('packStatus').textContent = 'Upload frames first.';
         document.getElementById('packStatus').className = 'status error';
         return;
       }
@@ -820,8 +761,6 @@
       const padding = parseInt(document.getElementById('packPadding').value, 10) || 0;
       const frames = packFrameImages.filter(Boolean);
       const rows = Math.ceil(frames.length / cols);
-
-      // Assume all same size – use first
       const fw = frames[0].naturalWidth;
       const fh = frames[0].naturalHeight;
 
@@ -829,14 +768,13 @@
       canvas.width = cols * fw + (cols - 1) * padding;
       canvas.height = rows * fh + (rows - 1) * padding;
       const ctx = canvas.getContext('2d');
-
       frames.forEach((img, i) => {
         const c = i % cols;
         const r = Math.floor(i / cols);
         ctx.drawImage(img, c * (fw + padding), r * (fh + padding));
       });
 
-      currentSheetCanvas = canvas; // reuse some state
+      currentSheetCanvas = canvas;
       currentFrames = frames.map(img => {
         const fc = document.createElement('canvas');
         fc.width = fw; fc.height = fh;
@@ -852,13 +790,12 @@
       displayImg.style.imageRendering = 'pixelated';
       preview.appendChild(displayImg);
 
-      // anim
       const animEl = document.getElementById('packAnimPreview');
       animEl.innerHTML = '';
       const previewCanvas = document.createElement('canvas');
       previewCanvas.width = fw;
       previewCanvas.height = fh;
-      previewCanvas.style.maxHeight = '160px';
+      previewCanvas.style.maxHeight = '150px';
       previewCanvas.style.imageRendering = 'pixelated';
       const pctx = previewCanvas.getContext('2d');
       pctx.drawImage(currentFrames[0], 0, 0);
@@ -868,7 +805,7 @@
 
       document.getElementById('packDownloadBtn').disabled = false;
       document.getElementById('packPlayBtn').disabled = false;
-      document.getElementById('packStatus').textContent = `Packed ${frames.length} frames into ${cols}×${rows} sheet (${canvas.width}×${canvas.height})`;
+      document.getElementById('packStatus').textContent = `Packed ${frames.length} frames (${canvas.width}×${canvas.height})`;
       document.getElementById('packStatus').className = 'status success';
     });
 
@@ -876,28 +813,23 @@
       if (!currentSheetCanvas) return;
       const a = document.createElement('a');
       a.href = currentSheetCanvas.toDataURL('image/png');
-      a.download = `packed-sprite-sheet-${Date.now()}.png`;
+      a.download = `packed-sprite-${Date.now()}.png`;
       a.click();
     });
 
-    let packAnimPlaying = false;
-    let packAnimFrame = 0;
-    let packAnimTimer = null;
+    let packAnimPlaying = false, packAnimFrame = 0, packAnimTimer = null;
     document.getElementById('packPlayBtn').addEventListener('click', () => {
       if (!currentFrames.length) return;
       packAnimPlaying = !packAnimPlaying;
       if (packAnimPlaying) {
-        const fps = 8;
         packAnimTimer = setInterval(() => {
           packAnimFrame = (packAnimFrame + 1) % currentFrames.length;
           if (window._packAnimCtx) {
             window._packAnimCtx.clearRect(0, 0, window._packAnimCanvas.width, window._packAnimCanvas.height);
             window._packAnimCtx.drawImage(currentFrames[packAnimFrame], 0, 0);
           }
-        }, 1000 / fps);
-      } else {
-        clearInterval(packAnimTimer);
-      }
+        }, 125);
+      } else clearInterval(packAnimTimer);
     });
   </script>
 </body>
