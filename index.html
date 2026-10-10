@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sprite Sheet Workbench</title>
+  <title>Sprite Sheet Workbench + AI Horde</title>
   <style>
     :root {
       --bg: #0c0e12;
@@ -34,10 +34,10 @@
     }
     header {
       text-align: center;
-      margin-bottom: 28px;
+      margin-bottom: 22px;
     }
     header h1 {
-      font-size: 1.7rem;
+      font-size: 1.65rem;
       font-weight: 700;
       letter-spacing: -0.03em;
       background: linear-gradient(120deg, #a78bfa, #6d5cff, #38bdf8);
@@ -45,30 +45,39 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    header p {
-      color: var(--muted);
-      margin-top: 6px;
-      font-size: 0.95rem;
-    }
+    header p { color: var(--muted); margin-top: 6px; font-size: 0.92rem; }
     .badge {
       display: inline-block;
-      margin-top: 10px;
-      font-size: 0.75rem;
+      margin-top: 8px;
+      font-size: 0.74rem;
       font-weight: 600;
       color: #6ee7b7;
       background: rgba(52,211,153,0.12);
       border: 1px solid rgba(52,211,153,0.25);
-      padding: 4px 12px;
+      padding: 4px 11px;
       border-radius: 999px;
     }
-    .grid {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      gap: 20px;
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface2);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 18px;
     }
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 9px;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
     }
+    .tab.active { background: var(--accent); color: #fff; }
+    .panel { display: none; }
+    .panel.active { display: block; }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -99,6 +108,8 @@
       font-weight: 500;
     }
     input[type="number"],
+    input[type="text"],
+    textarea,
     select {
       width: 100%;
       background: var(--surface2);
@@ -110,51 +121,20 @@
       font-family: inherit;
       outline: none;
     }
-    input[type="number"]:focus,
-    select:focus {
-      border-color: var(--accent);
-    }
+    textarea { min-height: 90px; resize: vertical; }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
     .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-bottom: 12px;
     }
-    .upload {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      min-height: 130px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      cursor: pointer;
-      position: relative;
-      transition: 0.15s;
-      text-align: center;
-      padding: 16px;
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
     }
-    .upload:hover, .upload.drag {
-      border-color: var(--accent);
-      background: rgba(109,92,255,0.07);
-    }
-    .upload img {
-      max-width: 100%;
-      max-height: 160px;
-      border-radius: 8px;
-      image-rendering: pixelated;
-    }
-    .upload .hint {
-      font-size: 0.82rem;
-      color: var(--muted);
-    }
-    .upload input {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -170,31 +150,47 @@
       transition: 0.15s;
     }
     .btn:active { transform: scale(0.98); }
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-      width: 100%;
-    }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
     .btn-primary:hover { background: var(--accent2); }
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-secondary {
       background: var(--surface2);
       color: var(--text);
       border: 1px solid var(--border);
     }
     .btn-secondary:hover { background: #272e3c; }
-    .btn-success {
-      background: var(--success);
-      color: #064e3b;
-    }
-    .btn-row {
+    .btn-success { background: var(--success); color: #064e3b; }
+    .upload {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      min-height: 120px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      position: relative;
+      text-align: center;
+      padding: 14px;
+      transition: 0.15s;
+    }
+    .upload:hover, .upload.drag {
+      border-color: var(--accent);
+      background: rgba(109,92,255,0.07);
+    }
+    .upload img {
+      max-width: 100%;
+      max-height: 150px;
+      border-radius: 8px;
+      image-rendering: pixelated;
+    }
+    .upload .hint { font-size: 0.82rem; color: var(--muted); }
+    .upload input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
     }
     .preview-box {
       background: #080a0e;
@@ -205,18 +201,16 @@
       align-items: center;
       justify-content: center;
       overflow: auto;
-      position: relative;
     }
     .preview-box img, .preview-box canvas {
       max-width: 100%;
       image-rendering: pixelated;
-      image-rendering: crisp-edges;
     }
     .anim-box {
       background: #080a0e;
       border: 1px solid var(--border);
       border-radius: 12px;
-      height: 180px;
+      height: 170px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -224,13 +218,7 @@
     }
     .anim-box canvas {
       image-rendering: pixelated;
-      image-rendering: crisp-edges;
-      max-height: 160px;
-    }
-    .meta {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 10px;
+      max-height: 150px;
     }
     .status {
       margin-top: 10px;
@@ -256,9 +244,9 @@
       border: 1px solid rgba(248,113,113,0.25);
     }
     .note {
-      font-size: 0.76rem;
+      font-size: 0.75rem;
       color: var(--muted);
-      margin-top: 12px;
+      margin-top: 10px;
       line-height: 1.4;
     }
     .controls {
@@ -271,59 +259,108 @@
       color: var(--muted);
     }
     .controls label { display: inline; margin: 0; }
-    .controls input[type="number"] {
-      width: 56px;
-      padding: 5px 7px;
-    }
-    .tabs {
-      display: flex;
-      gap: 4px;
+    .controls input[type="number"] { width: 56px; padding: 5px 7px; }
+    .progress {
+      height: 4px;
       background: var(--surface2);
-      padding: 4px;
-      border-radius: 12px;
-      margin-bottom: 18px;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 10px;
+      display: none;
     }
-    .tab {
-      flex: 1;
-      text-align: center;
-      padding: 9px;
-      border-radius: 9px;
-      cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: var(--muted);
-    }
-    .tab.active {
+    .progress.show { display: block; }
+    .progress-bar {
+      height: 100%;
       background: var(--accent);
-      color: #fff;
+      width: 0%;
+      transition: width 0.4s;
     }
-    .panel { display: none; }
-    .panel.active { display: block; }
+    .meta { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>Sprite Sheet Workbench</h1>
-      <p>Slice · Preview · Pack · Export</p>
-      <div class="badge">Works offline · No AI balance needed</div>
+      <p>Generate with AI Horde · Slice · Pack · Preview</p>
+      <div class="badge">AI Horde = free, no account (slow queue)</div>
     </header>
 
     <div class="tabs">
-      <div class="tab active" data-panel="slice">Slice Sheet</div>
+      <div class="tab active" data-panel="gen">Generate (AI Horde)</div>
+      <div class="tab" data-panel="slice">Slice Sheet</div>
       <div class="tab" data-panel="pack">Pack Frames</div>
     </div>
 
+    <!-- GENERATE PANEL -->
+    <div class="panel active" id="panel-gen">
+      <div class="grid">
+        <div class="card">
+          <h2>1. Prompt <span>AI Horde</span></h2>
+          <label for="prompt">Prompt</label>
+          <textarea id="prompt">side view platformer, 16-frame walk cycle, clean green screen background, consistent design, game sprite sheet, muscular brown cartoon gorilla ape character with spiky hair angry expression, walking to the right, 4x4 grid</textarea>
+
+          <div class="row" style="margin-top:12px">
+            <div>
+              <label>Width</label>
+              <select id="genWidth">
+                <option value="512" selected>512</option>
+                <option value="640">640</option>
+                <option value="768">768</option>
+              </select>
+            </div>
+            <div>
+              <label>Height</label>
+              <select id="genHeight">
+                <option value="512" selected>512</option>
+                <option value="640">640</option>
+                <option value="768">768</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Steps</label>
+              <input type="number" id="steps" value="20" min="10" max="30" />
+            </div>
+            <div>
+              <label>Model (optional)</label>
+              <input type="text" id="model" placeholder="auto" />
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="genBtn" style="margin-top:8px">Generate with AI Horde (Free)</button>
+          <div class="progress" id="genProgress"><div class="progress-bar" id="genBar"></div></div>
+          <div class="status" id="genStatus"></div>
+          <p class="note">
+            Uses the free anonymous AI Horde key. Generation is queued on volunteer GPUs — often 30–90 seconds.
+            Results are usually 512×512. For best character consistency, generate here in chat with me instead.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>2. Result</h2>
+          <div class="preview-box" id="genPreview">
+            <span style="color:var(--muted);font-size:0.9rem">Generated image appears here</span>
+          </div>
+          <div class="controls">
+            <button class="btn btn-success" id="genDlBtn" disabled>Download PNG</button>
+            <button class="btn btn-secondary" id="sendToSliceBtn" disabled>Send to Slice tab</button>
+          </div>
+          <div class="meta" id="genMeta"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- SLICE PANEL -->
-    <div class="panel active" id="panel-slice">
+    <div class="panel" id="panel-slice">
       <div class="grid">
         <div class="card">
           <h2>1. Load Sprite Sheet <span>Slice</span></h2>
           <div class="upload" id="sheetZone">
-            <div class="hint">Drop or click a sprite sheet image<br><small>PNG / JPG / WebP</small></div>
+            <div class="hint">Drop or click a sprite sheet<br><small>PNG / JPG / WebP</small></div>
             <input type="file" id="sheetInput" accept="image/*" />
           </div>
-
           <div class="row" style="margin-top:14px">
             <div>
               <label>Columns</label>
@@ -344,14 +381,9 @@
               <input type="number" id="fps" value="10" min="1" max="60" />
             </div>
           </div>
-
           <button class="btn btn-primary" id="sliceBtn" style="margin-top:6px" disabled>Slice & Preview</button>
           <div class="status" id="sliceStatus"></div>
-          <p class="note">
-            Tip: Use the sheets generated in chat (4×4 green background). Set Columns = 4, Rows = 4, then hit Slice.
-          </p>
         </div>
-
         <div class="card">
           <h2>2. Preview & Export</h2>
           <div class="preview-box" id="sheetPreview">
@@ -375,9 +407,9 @@
     <div class="panel" id="panel-pack">
       <div class="grid">
         <div class="card">
-          <h2>1. Upload Individual Frames <span>Pack</span></h2>
-          <div class="upload" id="framesZone" style="min-height:150px">
-            <div class="hint">Drop or select multiple frames<br><small>Order matters</small></div>
+          <h2>1. Upload Frames <span>Pack</span></h2>
+          <div class="upload" id="framesZone" style="min-height:140px">
+            <div class="hint">Drop multiple frames<br><small>Order matters</small></div>
             <input type="file" id="framesInput" accept="image/*" multiple />
           </div>
           <div class="row" style="margin-top:14px">
@@ -393,7 +425,6 @@
           <button class="btn btn-primary" id="packBtn" style="margin-top:6px">Pack into Sheet</button>
           <div class="status" id="packStatus"></div>
         </div>
-
         <div class="card">
           <h2>2. Packed Result</h2>
           <div class="preview-box" id="packPreview">
@@ -402,7 +433,7 @@
           <div class="anim-box" id="packAnim">
             <span style="color:var(--muted);font-size:0.85rem">Animation</span>
           </div>
-          <div class="btn-row">
+          <div class="controls">
             <button class="btn btn-success" id="packDlBtn" disabled>Download PNG</button>
             <button class="btn btn-secondary" id="packPlayBtn" disabled>Play / Pause</button>
           </div>
@@ -412,6 +443,9 @@
   </div>
 
   <script>
+    const HORDE_URL = "https://stablehorde.net/api/v2";
+    const ANON_KEY = "0000000000";
+
     // Tabs
     document.querySelectorAll('.tab').forEach(t => {
       t.addEventListener('click', () => {
@@ -422,20 +456,186 @@
       });
     });
 
-    // State
+    function setStatus(id, msg, type = '') {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = 'status show' + (type ? ' ' + type : '');
+    }
+
+    // ===== AI HORDE GENERATION =====
+    let genImgUrl = null;
+    let genImgElement = null;
+
+    document.getElementById('genBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('genBtn');
+      const progress = document.getElementById('genProgress');
+      const bar = document.getElementById('genBar');
+      btn.disabled = true;
+      progress.classList.add('show');
+      bar.style.width = '10%';
+      setStatus('genStatus', 'Submitting job to AI Horde queue…', '');
+
+      const prompt = document.getElementById('prompt').value.trim();
+      const width = parseInt(document.getElementById('genWidth').value, 10);
+      const height = parseInt(document.getElementById('genHeight').value, 10);
+      const steps = parseInt(document.getElementById('steps').value, 10) || 20;
+      const model = document.getElementById('model').value.trim();
+
+      const body = {
+        prompt: prompt,
+        params: {
+          width: width,
+          height: height,
+          steps: steps,
+          n: 1,
+          sampler_name: "k_euler",
+          cfg_scale: 7
+        },
+        nsfw: false,
+        censor_nsfw: true,
+        models: model ? [model] : [],
+        r2: true
+      };
+
+      try {
+        // 1. Submit
+        const submitRes = await fetch(HORDE_URL + '/generate/async', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
+            'Client-Agent': 'SpriteSheetWorkbench:1.0'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!submitRes.ok) {
+          const errText = await submitRes.text();
+          throw new Error('Submit failed: ' + submitRes.status + ' ' + errText);
+        }
+
+        const submitData = await submitRes.json();
+        const id = submitData.id;
+        if (!id) throw new Error('No job ID returned');
+
+        setStatus('genStatus', 'Job queued (ID: ' + id + '). Waiting for a free worker…', '');
+        bar.style.width = '25%';
+
+        // 2. Poll
+        let done = false;
+        let attempts = 0;
+        const maxAttempts = 120; // ~4 min
+
+        while (!done && attempts < maxAttempts) {
+          await new Promise(r => setTimeout(r, 2000));
+          attempts++;
+
+          const checkRes = await fetch(HORDE_URL + '/generate/check/' + id, {
+            headers: { 'apikey': ANON_KEY }
+          });
+          const checkData = await checkRes.json();
+
+          const pct = Math.min(25 + (checkData.wait_time ? 50 : 70), 90);
+          bar.style.width = pct + '%';
+
+          if (checkData.done) {
+            done = true;
+          } else if (checkData.faulted) {
+            throw new Error('Job faulted on the Horde');
+          } else {
+            const wait = checkData.wait_time || '?';
+            const queue = checkData.queue_position != null ? checkData.queue_position : '?';
+            setStatus('genStatus', `In queue… position ${queue}, ~${wait}s remaining`, '');
+          }
+        }
+
+        if (!done) throw new Error('Timed out waiting for AI Horde');
+
+        // 3. Get result
+        const statusRes = await fetch(HORDE_URL + '/generate/status/' + id, {
+          headers: { 'apikey': ANON_KEY }
+        });
+        const statusData = await statusRes.json();
+
+        if (!statusData.generations || !statusData.generations.length) {
+          throw new Error('No image returned');
+        }
+
+        const gen = statusData.generations[0];
+        genImgUrl = gen.img;
+
+        // Load image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('Failed to load result image'));
+          img.src = genImgUrl;
+        });
+
+        genImgElement = img;
+        const preview = document.getElementById('genPreview');
+        preview.innerHTML = '';
+        const display = document.createElement('img');
+        display.src = genImgUrl;
+        display.style.maxWidth = '100%';
+        preview.appendChild(display);
+
+        document.getElementById('genDlBtn').disabled = false;
+        document.getElementById('sendToSliceBtn').disabled = false;
+        document.getElementById('genMeta').textContent = `${width}×${height} · seed ${gen.seed || 'n/a'}`;
+        bar.style.width = '100%';
+        setStatus('genStatus', 'Done! Image generated via AI Horde.', 'ok');
+        setTimeout(() => progress.classList.remove('show'), 800);
+
+      } catch (err) {
+        console.error(err);
+        setStatus('genStatus', 'Error: ' + (err.message || err), 'err');
+        progress.classList.remove('show');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('genDlBtn').addEventListener('click', () => {
+      if (!genImgUrl) return;
+      const a = document.createElement('a');
+      a.href = genImgUrl;
+      a.download = `horde-sprite-${Date.now()}.webp`;
+      a.target = '_blank';
+      a.click();
+    });
+
+    document.getElementById('sendToSliceBtn').addEventListener('click', () => {
+      if (!genImgElement) return;
+      // Switch to slice tab and load the image
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+      document.querySelector('[data-panel="slice"]').classList.add('active');
+      document.getElementById('panel-slice').classList.add('active');
+
+      // Simulate loading the generated image into the slice zone
+      sheetImg = genImgElement;
+      const zone = document.getElementById('sheetZone');
+      zone.innerHTML = '';
+      const preview = document.createElement('img');
+      preview.src = genImgElement.src;
+      zone.appendChild(preview);
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'Generated image loaded – set 4×4 and click Slice';
+      zone.appendChild(hint);
+      document.getElementById('sliceBtn').disabled = false;
+      setStatus('sliceStatus', 'Image from AI Horde loaded. Set Columns=4, Rows=4 and click Slice.', 'ok');
+    });
+
+    // ===== SLICE =====
     let sheetImg = null;
     let frames = [];
     let playing = false;
     let frameIdx = 0;
     let timer = null;
     let meta = null;
-
-    // Helpers
-    function setStatus(id, msg, type = '') {
-      const el = document.getElementById(id);
-      el.textContent = msg;
-      el.className = 'status show' + (type ? ' ' + type : '');
-    }
 
     function loadFile(file, cb) {
       const r = new FileReader();
@@ -447,10 +647,8 @@
       r.readAsDataURL(file);
     }
 
-    // ===== SLICE =====
     const sheetZone = document.getElementById('sheetZone');
     const sheetInput = document.getElementById('sheetInput');
-
     sheetZone.addEventListener('dragover', e => { e.preventDefault(); sheetZone.classList.add('drag'); });
     sheetZone.addEventListener('dragleave', () => sheetZone.classList.remove('drag'));
     sheetZone.addEventListener('drop', e => {
@@ -458,9 +656,7 @@
       sheetZone.classList.remove('drag');
       if (e.dataTransfer.files[0]) handleSheet(e.dataTransfer.files[0]);
     });
-    sheetInput.addEventListener('change', () => {
-      if (sheetInput.files[0]) handleSheet(sheetInput.files[0]);
-    });
+    sheetInput.addEventListener('change', () => { if (sheetInput.files[0]) handleSheet(sheetInput.files[0]); });
 
     function handleSheet(file) {
       loadFile(file, img => {
@@ -490,7 +686,6 @@
       const rows = parseInt(document.getElementById('rows').value, 10) || 4;
       let count = parseInt(document.getElementById('frameCount').value, 10);
       if (!count || count < 1) count = cols * rows;
-
       const fw = Math.floor(sheetImg.naturalWidth / cols);
       const fh = Math.floor(sheetImg.naturalHeight / rows);
 
@@ -501,12 +696,10 @@
         const canvas = document.createElement('canvas');
         canvas.width = fw;
         canvas.height = fh;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(sheetImg, c * fw, r * fh, fw, fh, 0, 0, fw, fh);
+        canvas.getContext('2d').drawImage(sheetImg, c * fw, r * fh, fw, fh, 0, 0, fw, fh);
         frames.push(canvas);
       }
 
-      // Show full sheet
       const prev = document.getElementById('sheetPreview');
       prev.innerHTML = '';
       const disp = document.createElement('img');
@@ -515,39 +708,25 @@
       disp.style.imageRendering = 'pixelated';
       prev.appendChild(disp);
 
-      // Anim preview
       const anim = document.getElementById('animPreview');
       anim.innerHTML = '';
       const ac = document.createElement('canvas');
-      ac.width = fw;
-      ac.height = fh;
-      ac.style.maxHeight = '160px';
+      ac.width = fw; ac.height = fh;
+      ac.style.maxHeight = '150px';
       ac.style.imageRendering = 'pixelated';
       const actx = ac.getContext('2d');
       if (frames[0]) actx.drawImage(frames[0], 0, 0);
       anim.appendChild(ac);
-      window._ac = ac;
-      window._actx = actx;
+      window._ac = ac; window._actx = actx;
 
-      meta = {
-        columns: cols,
-        rows: rows,
-        frameWidth: fw,
-        frameHeight: fh,
-        frameCount: frames.length,
-        sheetWidth: sheetImg.naturalWidth,
-        sheetHeight: sheetImg.naturalHeight
-      };
-
-      document.getElementById('metaInfo').textContent =
-        `${frames.length} frames · ${fw}×${fh} px each · ${cols}×${rows} grid`;
+      meta = { columns: cols, rows: rows, frameWidth: fw, frameHeight: fh, frameCount: frames.length };
+      document.getElementById('metaInfo').textContent = `${frames.length} frames · ${fw}×${fh} px · ${cols}×${rows}`;
       document.getElementById('playBtn').disabled = false;
       document.getElementById('dlSheetBtn').disabled = false;
       document.getElementById('dlMetaBtn').disabled = false;
-      setStatus('sliceStatus', `Sliced ${frames.length} frames successfully`, 'ok');
+      setStatus('sliceStatus', `Sliced ${frames.length} frames`, 'ok');
     });
 
-    // Play
     document.getElementById('playBtn').addEventListener('click', () => {
       if (!frames.length) return;
       playing = !playing;
@@ -560,9 +739,7 @@
             window._actx.drawImage(frames[frameIdx], 0, 0);
           }
         }, 1000 / fps);
-      } else {
-        clearInterval(timer);
-      }
+      } else clearInterval(timer);
     });
 
     document.getElementById('dlSheetBtn').addEventListener('click', () => {
@@ -575,10 +752,7 @@
 
     document.getElementById('dlMetaBtn').addEventListener('click', () => {
       if (!meta) return;
-      const data = {
-        ...meta,
-        fps: parseInt(document.getElementById('playFps').value, 10) || 10
-      };
+      const data = { ...meta, fps: parseInt(document.getElementById('playFps').value, 10) || 10 };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -590,7 +764,6 @@
     let packImgs = [];
     const framesZone = document.getElementById('framesZone');
     const framesInput = document.getElementById('framesInput');
-
     framesZone.addEventListener('dragover', e => { e.preventDefault(); framesZone.classList.add('drag'); });
     framesZone.addEventListener('dragleave', () => framesZone.classList.remove('drag'));
     framesZone.addEventListener('drop', e => {
@@ -635,7 +808,6 @@
       const rows = Math.ceil(imgs.length / cols);
       const fw = imgs[0].naturalWidth;
       const fh = imgs[0].naturalHeight;
-
       const canvas = document.createElement('canvas');
       canvas.width = cols * fw + (cols - 1) * pad;
       canvas.height = rows * fh + (rows - 1) * pad;
@@ -645,14 +817,12 @@
         const r = Math.floor(i / cols);
         ctx.drawImage(img, c * (fw + pad), r * (fh + pad));
       });
-
       frames = imgs.map(img => {
         const c = document.createElement('canvas');
         c.width = fw; c.height = fh;
         c.getContext('2d').drawImage(img, 0, 0);
         return c;
       });
-
       const prev = document.getElementById('packPreview');
       prev.innerHTML = '';
       const disp = document.createElement('img');
@@ -660,24 +830,19 @@
       disp.style.maxWidth = '100%';
       disp.style.imageRendering = 'pixelated';
       prev.appendChild(disp);
-
       const anim = document.getElementById('packAnim');
       anim.innerHTML = '';
       const ac = document.createElement('canvas');
       ac.width = fw; ac.height = fh;
-      ac.style.maxHeight = '160px';
+      ac.style.maxHeight = '150px';
       ac.style.imageRendering = 'pixelated';
       const actx = ac.getContext('2d');
       actx.drawImage(frames[0], 0, 0);
       anim.appendChild(ac);
-      window._pac = ac;
-      window._pactx = actx;
-
+      window._pac = ac; window._pactx = actx;
       document.getElementById('packDlBtn').disabled = false;
       document.getElementById('packPlayBtn').disabled = false;
-      setStatus('packStatus', `Packed ${imgs.length} frames (${canvas.width}×${canvas.height})`, 'ok');
-
-      // store for download
+      setStatus('packStatus', `Packed ${imgs.length} frames`, 'ok');
       window._packCanvas = canvas;
     });
 
