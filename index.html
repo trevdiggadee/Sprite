@@ -276,13 +276,79 @@
       transition: width 0.4s;
     }
     .meta { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 10px 0 6px;
+      cursor: pointer;
+    }
+    .check input { width: auto; accent-color: var(--accent); }
+    details {
+      margin-top: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px 12px;
+      background: var(--surface2);
+    }
+    details summary {
+      cursor: pointer;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    details label, details .row { margin-top: 10px; }
+    details .row { margin-bottom: 0; }
+    details textarea, details input[type="number"], details input[type="text"] { background: var(--surface); }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .controls input[type="range"] { width: 110px; }
+    .preview-box canvas { height: auto; }
+    .preview-box.sm { min-height: 120px; }
+    .promptpv {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .chip {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .chip.run { border-color: var(--accent); color: #c4b5fd; animation: chipPulse 1.2s infinite; }
+    .chip.ok { background: rgba(52,211,153,0.15); border-color: rgba(52,211,153,0.4); color: #6ee7b7; }
+    .chip.err { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: #fca5a5; }
+    @keyframes chipPulse { 50% { opacity: 0.5; } }
+    @media (prefers-reduced-motion: reduce) { .chip.run { animation: none; } }
+    .btn-danger {
+      background: rgba(248,113,113,0.12);
+      color: #fca5a5;
+      border: 1px solid rgba(248,113,113,0.3);
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.2); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .checker {
+      background: repeating-conic-gradient(#1d222c 0% 25%, #262d3a 0% 50%) 50% / 16px 16px;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>Sprite Sheet Workbench</h1>
-      <p>Generate with AI Horde · Slice · Pack · Preview</p>
+      <p>Upload a character, generate a sprite sheet with AI Horde, then slice, pack and preview</p>
       <div class="badge">AI Horde = free, no account (slow queue)</div>
     </header>
 
@@ -296,62 +362,183 @@
     <div class="panel active" id="panel-gen">
       <div class="grid">
         <div class="card">
-          <h2>1. Prompt <span>AI Horde</span></h2>
-          <label for="prompt">Prompt</label>
-          <textarea id="prompt">side view platformer, 16-frame walk cycle, clean green screen background, consistent design, game sprite sheet, muscular brown cartoon gorilla ape character with spiky hair angry expression, walking to the right, 4x4 grid</textarea>
-
-          <label style="margin-top:12px">Reference Image (optional – upload your character)</label>
-          <div class="upload" id="refZone" style="min-height:110px;margin-bottom:12px">
-            <div class="hint">Drop or click to upload reference image<br><small>Helps match your character (img2img)</small></div>
+          <h2>1. Character reference <span>img2img</span></h2>
+          <div class="upload" id="refZone" style="min-height:130px">
+            <div class="hint">Drop or click to upload your character<br><small>PNG / JPG / WebP · plain or transparent background works best</small></div>
             <input type="file" id="refInput" accept="image/*" />
           </div>
+          <label class="check"><input type="checkbox" id="refKey"> Remove the reference's background (uses its top-left pixel colour)</label>
+          <button class="btn btn-secondary" id="refClear" style="display:none;margin-top:4px">Remove reference</button>
 
-          <div class="row" style="margin-top:12px">
+          <h2 style="margin-top:18px">2. Animation</h2>
+          <div class="row">
             <div>
-              <label>Width</label>
-              <select id="genWidth">
-                <option value="512" selected>512</option>
-                <option value="640">640</option>
-                <option value="768">768</option>
+              <label for="gAction">Action</label>
+              <select id="gAction">
+                <option value="walk" selected>Walk cycle</option>
+                <option value="run">Run cycle</option>
+                <option value="idle">Idle</option>
+                <option value="jump">Jump</option>
+                <option value="attack">Attack</option>
+                <option value="custom">Custom (describe below)</option>
               </select>
             </div>
             <div>
-              <label>Height</label>
-              <select id="genHeight">
-                <option value="512" selected>512</option>
-                <option value="640">640</option>
-                <option value="768">768</option>
+              <label for="gView">View</label>
+              <select id="gView">
+                <option value="side" selected>Side, facing right</option>
+                <option value="front">Front</option>
+                <option value="back">Back</option>
+                <option value="top">Top-down</option>
+                <option value="three">Three-quarter</option>
               </select>
             </div>
           </div>
           <div class="row">
             <div>
-              <label>Steps</label>
-              <input type="number" id="steps" value="20" min="10" max="30" />
+              <label for="gStyle">Art style</label>
+              <select id="gStyle">
+                <option value="match" selected>Match the reference</option>
+                <option value="pixel">Pixel art</option>
+                <option value="cartoon">Clean cartoon</option>
+                <option value="hand">Hand-drawn</option>
+              </select>
             </div>
             <div>
-              <label>Model (optional)</label>
-              <input type="text" id="model" placeholder="auto" />
+              <label for="gBg">Background</label>
+              <select id="gBg">
+                <option value="#00ff00" data-name="bright green screen" selected>Green screen</option>
+                <option value="#ff00ff" data-name="magenta" >Magenta</option>
+                <option value="#0066ff" data-name="blue">Blue</option>
+                <option value="#ffffff" data-name="white">White</option>
+                <option value="#808080" data-name="gray">Gray</option>
+              </select>
+            </div>
+          </div>
+          <label for="gDesc">Describe your character (optional)</label>
+          <textarea id="gDesc" style="min-height:62px" placeholder="e.g. muscular brown gorilla with spiky hair and an angry expression"></textarea>
+
+          <h2 style="margin-top:18px">3. Sheet</h2>
+          <div class="row">
+            <div>
+              <label for="gMode">Method</label>
+              <select id="gMode">
+                <option value="sheet" selected>Whole sheet (1 job, fast)</option>
+                <option value="frames">Frame by frame (1 job per frame, more consistent)</option>
+              </select>
+            </div>
+            <div>
+              <label for="gDenoise">Variation: <span id="gDenoiseVal">0.70</span></label>
+              <input type="range" id="gDenoise" min="0.3" max="0.95" step="0.05" value="0.7" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="gCols">Columns</label>
+              <input type="number" id="gCols" value="4" min="1" max="8" />
+            </div>
+            <div>
+              <label for="gRows">Rows</label>
+              <input type="number" id="gRows" value="4" min="1" max="8" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="gSize" id="gSizeLabel">Generation size (px)</label>
+              <select id="gSize">
+                <option value="384">384</option>
+                <option value="512" selected>512</option>
+                <option value="640">640</option>
+                <option value="768">768</option>
+              </select>
+            </div>
+            <div id="cellWrap" style="display:none">
+              <label for="gCell">Output frame size (px)</label>
+              <select id="gCell">
+                <option value="64">64</option>
+                <option value="96">96</option>
+                <option value="128" selected>128</option>
+                <option value="192">192</option>
+                <option value="256">256</option>
+              </select>
             </div>
           </div>
 
-          <button class="btn btn-primary" id="genBtn" style="margin-top:8px">Generate with AI Horde (Free)</button>
+          <details>
+            <summary>Advanced</summary>
+            <label class="check"><input type="checkbox" id="gPose" checked> Add slight bob and lean to each frame of the template</label>
+            <label for="gNeg">Negative prompt</label>
+            <textarea id="gNeg" style="min-height:56px">blurry, deformed, extra limbs, extra characters, text, watermark, grid lines, cropped, low quality</textarea>
+            <div class="row">
+              <div>
+                <label for="gSteps">Steps</label>
+                <input type="number" id="gSteps" value="25" min="10" max="50" />
+              </div>
+              <div>
+                <label for="gCfg">Guidance</label>
+                <input type="number" id="gCfg" value="7" min="1" max="20" step="0.5" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="gModel">Model (optional)</label>
+                <input type="text" id="gModel" placeholder="auto" />
+              </div>
+              <div>
+                <label for="gSeed">Seed (optional)</label>
+                <input type="text" id="gSeed" placeholder="random" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="gConc">Parallel jobs (frame by frame)</label>
+                <input type="number" id="gConc" value="2" min="1" max="4" />
+              </div>
+              <div>
+                <label for="gKey">AI Horde API key (optional)</label>
+                <input type="text" id="gKey" placeholder="anonymous" autocomplete="off" />
+              </div>
+            </div>
+            <p class="note">A free AI Horde account key gets you a shorter queue. It is only stored in this browser.</p>
+          </details>
+
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-primary" id="genBtn">Generate sprite sheet</button>
+            <button class="btn btn-danger" id="genCancelBtn" style="display:none;width:auto">Cancel</button>
+          </div>
           <div class="progress" id="genProgress"><div class="progress-bar" id="genBar"></div></div>
           <div class="status" id="genStatus"></div>
-          <p class="note">
-            Uses the free anonymous AI Horde key. Generation is queued on volunteer GPUs — often 30–90 seconds.
-            Results are usually 512×512. For best character consistency, generate here in chat with me instead.
-          </p>
+          <div class="chips" id="frameChips"></div>
+          <p class="note" id="genEstimate"></p>
         </div>
 
         <div class="card">
-          <h2>2. Result</h2>
+          <h2>Template sent to the AI <span>preview</span></h2>
+          <div class="preview-box sm" id="tplPreview">
+            <span style="color:var(--muted);font-size:0.9rem">Upload a reference to see the template</span>
+          </div>
+          <p class="promptpv" id="promptPreview"></p>
+
+          <h2 style="margin-top:20px">Result</h2>
           <div class="preview-box" id="genPreview">
-            <span style="color:var(--muted);font-size:0.9rem">Generated image appears here</span>
+            <span style="color:var(--muted);font-size:0.9rem">Generated sheet appears here</span>
+          </div>
+          <div class="anim-box" id="genAnim">
+            <span style="color:var(--muted);font-size:0.85rem">Animation preview</span>
           </div>
           <div class="controls">
+            <label>FPS <input type="number" id="gFps" value="8" min="1" max="30"></label>
             <button class="btn btn-success" id="genDlBtn" disabled>Download PNG</button>
             <button class="btn btn-secondary" id="sendToSliceBtn" disabled>Send to Slice tab</button>
+          </div>
+          <div class="controls">
+            <select id="keyMode" style="width:auto">
+              <option value="bg">Key out the chosen background</option>
+              <option value="corner">Key out the sheet's corner colour</option>
+            </select>
+            <label>Tolerance <input type="range" id="keyTol" min="20" max="200" value="80" style="width:110px"></label>
+            <button class="btn btn-secondary" id="keyBtn" disabled>Make transparent</button>
+            <button class="btn btn-secondary" id="keyResetBtn" disabled>Restore</button>
           </div>
           <div class="meta" id="genMeta"></div>
         </div>
@@ -468,37 +655,478 @@
       el.className = 'status show' + (type ? ' ' + type : '');
     }
 
-    // ===== AI HORDE GENERATION =====
-    let genImgUrl = null;
-    let genImgElement = null;
-    let refBase64 = null; // data URL without the prefix for Horde
+    // ===== AI HORDE GENERATION (reference image -> sprite sheet) =====
+    (() => {
+      const $ = id => document.getElementById(id);
+      const st = {
+        refImg: null,        // original uploaded Image
+        refCanvas: null,     // prepared (trimmed / keyed) reference
+        res: null,           // { cols, rows, cw, ch, seed, tainted, base, cur }
+        running: false,
+        abort: null,
+        activeIds: new Set(),
+        animTimer: null,
+        denoiseTouched: false,
+        tplTimer: null
+      };
 
-    // Reference image upload
-    const refZone = document.getElementById('refZone');
-    const refInput = document.getElementById('refInput');
-    if (refZone && refInput) {
-      refZone.addEventListener('dragover', e => { e.preventDefault(); refZone.classList.add('drag'); });
-      refZone.addEventListener('dragleave', () => refZone.classList.remove('drag'));
-      refZone.addEventListener('drop', e => {
-        e.preventDefault();
-        refZone.classList.remove('drag');
-        if (e.dataTransfer.files[0]) handleRef(e.dataTransfer.files[0]);
+      // ---------- small helpers ----------
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const round64 = v => Math.max(64, Math.round(v / 64) * 64);
+      const hexToRgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+      const abortErr = () => new DOMException('Cancelled', 'AbortError');
+      const sleep = (ms, signal) => new Promise((res, rej) => {
+        if (signal && signal.aborted) return rej(abortErr());
+        const t = setTimeout(res, ms);
+        if (signal) signal.addEventListener('abort', () => { clearTimeout(t); rej(abortErr()); }, { once: true });
       });
-      refInput.addEventListener('change', () => { if (refInput.files[0]) handleRef(refInput.files[0]); });
-    }
+      const cloneCanvas = src => {
+        const c = document.createElement('canvas');
+        c.width = src.width; c.height = src.height;
+        c.getContext('2d').drawImage(src, 0, 0);
+        return c;
+      };
+      const setBar = pct => { $('genBar').style.width = pct + '%'; };
+      const say = (msg, type = '') => setStatus('genStatus', msg, type);
 
-    function handleRef(file) {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        const dataUrl = e.target.result;
-        // AI Horde wants base64 without the data:image/...;base64, prefix
-        refBase64 = dataUrl.split(',')[1] || dataUrl;
+      // ---------- prompt building ----------
+      const ACTIONS = {
+        walk: 'walk cycle', run: 'run cycle', idle: 'idle breathing animation',
+        jump: 'jump animation', attack: 'attack animation', custom: 'animation'
+      };
+      const VIEWS = {
+        side: 'side view, facing right', front: 'front view', back: 'back view',
+        top: 'top-down view', three: 'three-quarter view'
+      };
+      const STYLES = {
+        match: 'game sprite, same art style as the reference',
+        pixel: 'pixel art, 16-bit retro game sprite, crisp pixels, limited palette',
+        cartoon: 'clean cartoon game sprite, bold outlines, flat colors',
+        hand: 'hand-drawn 2D game sprite, ink outlines'
+      };
+      const POSES = {
+        walk: ['contact pose, front foot forward', 'down pose, body lowered, foot planted', 'passing pose, legs crossing mid-stride', 'up pose, body raised, rear leg lifting',
+               'contact pose, other foot forward', 'down pose, body lowered, other foot planted', 'passing pose, legs crossing mid-stride', 'up pose, body raised, other leg lifting'],
+        run: ['flight pose, both feet off the ground, leaning forward', 'contact pose, front foot landing', 'compression pose, knee bent low', 'push-off pose, back leg extended',
+              'flight pose, other leg forward', 'contact pose, other foot landing', 'compression pose, other knee bent', 'push-off pose, other leg extended'],
+        idle: ['standing relaxed, chest low', 'chest rising slightly', 'standing, chest at its highest', 'chest lowering slightly'],
+        jump: ['crouching to jump', 'pushing off the ground', 'rising, legs tucked', 'apex of the jump', 'falling, legs extending', 'landing, knees bent'],
+        attack: ['wind-up, arm pulled back', 'arm swinging forward', 'strike at full extension', 'follow-through', 'recovering to ready stance'],
+        custom: null
+      };
+
+      function cfg() {
+        const cols = clamp(parseInt($('gCols').value, 10) || 4, 1, 8);
+        const rows = clamp(parseInt($('gRows').value, 10) || 4, 1, 8);
+        const bgSel = $('gBg');
+        return {
+          mode: $('gMode').value, cols, rows, n: cols * rows,
+          size: parseInt($('gSize').value, 10), cell: parseInt($('gCell').value, 10),
+          bg: bgSel.value, bgName: bgSel.options[bgSel.selectedIndex].dataset.name,
+          action: $('gAction').value, view: $('gView').value, style: $('gStyle').value,
+          desc: $('gDesc').value.trim(), neg: $('gNeg').value.trim(),
+          steps: clamp(parseInt($('gSteps').value, 10) || 25, 10, 50),
+          cfgScale: clamp(parseFloat($('gCfg').value) || 7, 1, 20),
+          denoise: parseFloat($('gDenoise').value),
+          model: $('gModel').value.trim(), seed: $('gSeed').value.trim(), key: $('gKey').value.trim(),
+          pose: $('gPose').checked, conc: clamp(parseInt($('gConc').value, 10) || 2, 1, 4)
+        };
+      }
+
+      function sheetPrompt(c) {
+        return [
+          STYLES[c.style], 'sprite sheet', `${c.cols}x${c.rows} grid of ${c.n} animation frames`, ACTIONS[c.action],
+          'same single character in every cell', VIEWS[c.view], c.desc,
+          `solid flat ${c.bgName} background`, 'evenly spaced, consistent design, full body, no text'
+        ].filter(Boolean).join(', ');
+      }
+      function framePrompt(c, i) {
+        const poses = POSES[c.action];
+        const pose = poses ? poses[Math.floor(i * poses.length / c.n)] : '';
+        return [
+          STYLES[c.style], 'single game sprite', c.desc, VIEWS[c.view], pose,
+          `frame ${i + 1} of ${c.n} of a ${ACTIONS[c.action]}`,
+          `solid flat ${c.bgName} background`, 'centered, full body, consistent design, no text'
+        ].filter(Boolean).join(', ');
+      }
+
+      // ---------- canvas work ----------
+      function chromaKey(cv, rgb, tol) {
+        const ctx = cv.getContext('2d');
+        const d = ctx.getImageData(0, 0, cv.width, cv.height);
+        const p = d.data;
+        const soft = tol * 0.35;
+        for (let i = 0; i < p.length; i += 4) {
+          const dr = p[i] - rgb[0], dg = p[i + 1] - rgb[1], db = p[i + 2] - rgb[2];
+          const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+          if (dist < tol) p[i + 3] = 0;
+          else if (dist < tol + soft) p[i + 3] = Math.round(p[i + 3] * (dist - tol) / soft);
+        }
+        ctx.putImageData(d, 0, 0);
+      }
+
+      function trimCanvas(cv) {
+        try {
+          const ctx = cv.getContext('2d');
+          const { data, width, height } = ctx.getImageData(0, 0, cv.width, cv.height);
+          let x0 = width, y0 = height, x1 = -1, y1 = -1;
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              if (data[(y * width + x) * 4 + 3] > 10) {
+                if (x < x0) x0 = x; if (x > x1) x1 = x;
+                if (y < y0) y0 = y; if (y > y1) y1 = y;
+              }
+            }
+          }
+          if (x1 < 0) return cv;
+          const w = x1 - x0 + 1, h = y1 - y0 + 1;
+          if (w === width && h === height) return cv;
+          const out = document.createElement('canvas');
+          out.width = w; out.height = h;
+          out.getContext('2d').drawImage(cv, x0, y0, w, h, 0, 0, w, h);
+          return out;
+        } catch (e) { return cv; }
+      }
+
+      // Draw the reference into one cell, feet anchored to the bottom, optional bob/lean.
+      function drawCell(ctx, src, x, y, w, h, i, n, pose) {
+        const pad = 0.08;
+        const s = Math.min(w * (1 - 2 * pad) / src.width, h * (1 - 2 * pad) / src.height);
+        const dw = src.width * s, dh = src.height * s;
+        let dy = 0, rot = 0, sy = 1;
+        if (pose && n > 1) {
+          const ph = i / n * Math.PI * 2;
+          dy = -Math.abs(Math.sin(ph)) * h * 0.03;
+          rot = Math.sin(ph) * 0.05;
+          sy = 1 + Math.cos(ph * 2) * 0.025;
+        }
+        ctx.save();
+        ctx.translate(x + w / 2, y + h * (1 - pad) + dy);
+        ctx.rotate(rot);
+        ctx.scale(1, sy);
+        ctx.drawImage(src, -dw / 2, -dh, dw, dh);
+        ctx.restore();
+      }
+
+      function newBgCanvas(w, h, bg) {
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        return cv;
+      }
+      function sheetGeometry(c) {
+        const m = Math.max(c.cols, c.rows);
+        return { W: round64(c.size * c.cols / m), H: round64(c.size * c.rows / m) };
+      }
+      function buildSheetTemplate(c) {
+        const { W, H } = sheetGeometry(c);
+        const cv = newBgCanvas(W, H, c.bg);
+        const ctx = cv.getContext('2d');
+        const cw = W / c.cols, ch = H / c.rows;
+        for (let i = 0; i < c.n; i++) {
+          drawCell(ctx, st.refCanvas, (i % c.cols) * cw, Math.floor(i / c.cols) * ch, cw, ch, i, c.n, c.pose);
+        }
+        return cv;
+      }
+      function buildFrameTemplate(c, i) {
+        const cv = newBgCanvas(c.size, c.size, c.bg);
+        drawCell(cv.getContext('2d'), st.refCanvas, 0, 0, c.size, c.size, i, c.n, c.pose);
+        return cv;
+      }
+      function canvasToB64(cv) {
+        let u = cv.toDataURL('image/webp', 0.92);
+        if (!u.startsWith('data:image/webp')) u = cv.toDataURL('image/png');
+        return u.split(',')[1];
+      }
+
+      // ---------- AI Horde ----------
+      async function errText(res) {
+        try {
+          const t = await res.text();
+          try { const j = JSON.parse(t); return j.message || (j.errors ? JSON.stringify(j.errors) : t); }
+          catch (e) { return t; }
+        } catch (e) { return res.statusText; }
+      }
+
+      function baseBody(c, prompt, w, h, seed) {
+        const params = { width: w, height: h, steps: c.steps, n: 1, sampler_name: 'k_euler', cfg_scale: c.cfgScale };
+        if (seed) params.seed = String(seed);
+        return {
+          prompt: prompt + ' ### ' + (c.neg || 'blurry, deformed, text, watermark'),
+          params,
+          nsfw: false,
+          censor_nsfw: true,
+          models: c.model ? [c.model] : [],
+          r2: true
+        };
+      }
+      function attachRef(body, srcCanvas, c) {
+        body.source_image = canvasToB64(srcCanvas);
+        body.source_processing = 'img2img';
+        body.params.denoising_strength = c.denoise;
+      }
+
+      async function hordeJob(body, key, signal, onUpdate) {
+        const apikey = key || ANON_KEY;
+        const headers = { 'Content-Type': 'application/json', apikey, 'Client-Agent': 'SpriteSheetWorkbench:2.0:unknown' };
+        let id = null;
+        for (let attempt = 0; attempt < 40 && !id; attempt++) {
+          const res = await fetch(HORDE_URL + '/generate/async', { method: 'POST', headers, body: JSON.stringify(body), signal });
+          if (res.ok) { id = (await res.json()).id; break; }
+          if (res.status === 429) {
+            onUpdate && onUpdate('Horde is busy – waiting for a free slot…');
+            await sleep(6000, signal);
+            continue;
+          }
+          throw new Error(`Submit failed (${res.status}): ${await errText(res)}`);
+        }
+        if (!id) throw new Error('Could not submit the job – the Horde kept rate-limiting this browser');
+        st.activeIds.add(id);
+        try {
+          const t0 = Date.now();
+          for (;;) {
+            await sleep(3000, signal);
+            if (Date.now() - t0 > 12 * 60 * 1000) throw new Error('Timed out waiting for AI Horde');
+            const r = await fetch(HORDE_URL + '/generate/check/' + id, { headers: { apikey }, signal });
+            if (r.status === 429) continue;
+            if (!r.ok) throw new Error(`Status check failed (${r.status})`);
+            const d = await r.json();
+            if (d.faulted) throw new Error('The job failed on the Horde');
+            if (d.done) break;
+            onUpdate && onUpdate(d.processing
+              ? 'A worker is generating your image…'
+              : `In queue – position ${d.queue_position != null ? d.queue_position : '?'}, about ${d.wait_time != null ? d.wait_time : '?'}s`);
+          }
+          const sr = await fetch(HORDE_URL + '/generate/status/' + id, { headers: { apikey }, signal });
+          if (!sr.ok) throw new Error(`Could not fetch result (${sr.status})`);
+          const sd = await sr.json();
+          const g = sd.generations && sd.generations[0];
+          if (!g || !g.img) throw new Error('No image returned');
+          if (g.censored) throw new Error('The Horde censored this image – try a different reference or description');
+          return g;
+        } finally {
+          st.activeIds.delete(id);
+        }
+      }
+
+      async function loadGenImage(g, signal) {
+        let url = g.img;
+        const isUrl = /^https?:/i.test(url);
+        try {
+          let blob;
+          if (isUrl) {
+            const r = await fetch(url, { signal });
+            if (!r.ok) throw new Error('download failed');
+            blob = await r.blob();
+          } else {
+            const bin = atob(url);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            blob = new Blob([arr], { type: 'image/webp' });
+          }
+          url = URL.createObjectURL(blob);
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          if (!isUrl) throw new Error('Could not decode the returned image');
+          // CORS blocked the download: still display it, but pixels will be unreadable
+        }
+        const img = new Image();
+        await new Promise((res, rej) => {
+          img.onload = res;
+          img.onerror = () => rej(new Error('Failed to load the result image'));
+          img.src = url;
+        });
+        img._tainted = !url.startsWith('blob:');
+        return img;
+      }
+
+      // ---------- result handling ----------
+      function setResult(r) {
+        st.res = { ...r, base: r.canvas, cur: cloneCanvas(r.canvas) };
+        delete st.res.canvas;
+        renderResult();
+        ['genDlBtn', 'sendToSliceBtn', 'keyBtn', 'keyResetBtn'].forEach(id => { $(id).disabled = false; });
+        $('genMeta').textContent = `${st.res.cols}×${st.res.rows} · ${st.res.cw}×${st.res.ch} px frames · seed ${st.res.seed || 'n/a'}`;
+      }
+
+      function renderResult() {
+        const r = st.res;
+        if (!r) return;
+        const box = $('genPreview');
+        box.innerHTML = '';
+        r.cur.classList.add('checker');
+        box.appendChild(r.cur);
+        startAnim();
+      }
+
+      function stopAnim() { if (st.animTimer) { clearInterval(st.animTimer); st.animTimer = null; } }
+      function startAnim() {
+        stopAnim();
+        const r = st.res;
+        if (!r) return;
+        const box = $('genAnim');
+        box.innerHTML = '';
+        const cv = document.createElement('canvas');
+        cv.width = r.cw; cv.height = r.ch;
+        cv.className = 'checker';
+        box.appendChild(cv);
+        const ctx = cv.getContext('2d');
+        const n = r.cols * r.rows;
+        let k = 0;
+        const draw = () => {
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          ctx.drawImage(r.cur, (k % r.cols) * r.cw, Math.floor(k / r.cols) * r.ch, r.cw, r.ch, 0, 0, r.cw, r.ch);
+          k = (k + 1) % n;
+        };
+        draw();
+        const fps = clamp(parseInt($('gFps').value, 10) || 8, 1, 30);
+        if (n > 1) st.animTimer = setInterval(draw, 1000 / fps);
+      }
+
+      // ---------- generation ----------
+      function buildChips(n) {
+        const box = $('frameChips');
+        box.innerHTML = '';
+        for (let i = 0; i < n; i++) {
+          const s = document.createElement('span');
+          s.className = 'chip';
+          s.id = 'chip' + i;
+          s.textContent = i + 1;
+          box.appendChild(s);
+        }
+      }
+      function setChip(i, state, title) {
+        const el = $('chip' + i);
+        if (!el) return;
+        el.className = 'chip' + (state ? ' ' + state : '');
+        if (title) el.title = title;
+      }
+
+      async function runSheet(c, signal) {
+        const { W, H } = sheetGeometry(c);
+        const body = baseBody(c, sheetPrompt(c), W, H, c.seed);
+        if (st.refCanvas) attachRef(body, buildSheetTemplate(c), c);
+        setBar(12);
+        say(st.refCanvas ? 'Submitting your reference to AI Horde…' : 'No reference loaded – generating from the text prompt only…');
+        const g = await hordeJob(body, c.key, signal, msg => say(msg));
+        setBar(90);
+        const img = await loadGenImage(g, signal);
+        const cw = Math.floor(img.naturalWidth / c.cols), ch = Math.floor(img.naturalHeight / c.rows);
+        const cv = document.createElement('canvas');
+        cv.width = cw * c.cols; cv.height = ch * c.rows;
+        const ctx = cv.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, cv.width, cv.height);
+        setResult({ canvas: cv, cols: c.cols, rows: c.rows, cw, ch, seed: g.seed, tainted: img._tainted });
+        setBar(100);
+        say(img._tainted
+          ? 'Done, but the browser blocked pixel access to the image (CORS) – slicing and downloading from here may not work.'
+          : 'Done! Check the animation preview, then download or send it to the Slice tab.', img._tainted ? 'err' : 'ok');
+      }
+
+      async function runFrames(c, signal) {
+        const n = c.n;
+        const seed = c.seed || String(Math.floor(Math.random() * 1e9));
+        const imgs = new Array(n).fill(null);
+        const errs = [];
+        buildChips(n);
+        let next = 0, done = 0;
+        setBar(8);
+        say(`Generating ${n} frames…`);
+
+        const worker = async () => {
+          for (;;) {
+            if (signal.aborted) throw abortErr();
+            const i = next++;
+            if (i >= n) return;
+            setChip(i, 'run');
+            let ok = false, lastErr = null;
+            for (let t = 0; t < 3 && !ok; t++) {
+              try {
+                const body = baseBody(c, framePrompt(c, i), c.size, c.size, seed);
+                if (st.refCanvas) attachRef(body, buildFrameTemplate(c, i), c);
+                const g = await hordeJob(body, c.key, signal, msg => setChip(i, 'run', msg));
+                imgs[i] = await loadGenImage(g, signal);
+                ok = true;
+              } catch (e) {
+                if (e.name === 'AbortError') throw e;
+                lastErr = e;
+              }
+            }
+            done++;
+            setChip(i, ok ? 'ok' : 'err', ok ? 'Done' : lastErr.message);
+            if (!ok) errs.push(`#${i + 1}: ${lastErr.message}`);
+            setBar(8 + 82 * done / n);
+            say(`${done} of ${n} frames finished…`);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(c.conc, n) }, worker));
+
+        const cell = c.cell;
+        const cv = newBgCanvas(cell * c.cols, cell * c.rows, c.bg);
+        const ctx = cv.getContext('2d');
+        imgs.forEach((im, i) => {
+          const x = (i % c.cols) * cell, y = Math.floor(i / c.cols) * cell;
+          if (im) ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, y, cell, cell);
+          else if (st.refCanvas) drawCell(ctx, st.refCanvas, x, y, cell, cell, i, n, false);
+        });
+        const tainted = imgs.some(im => im && im._tainted);
+        if (errs.length === n) throw new Error('Every frame failed. First error – ' + errs[0]);
+        setResult({ canvas: cv, cols: c.cols, rows: c.rows, cw: cell, ch: cell, seed, tainted });
+        setBar(100);
+        if (errs.length) say(`Done, but ${errs.length} frame(s) failed and were filled with the plain reference: ${errs.join(' | ')}`, 'err');
+        else if (tainted) say('Done, but the browser blocked pixel access to the images (CORS) – slicing and downloading may not work.', 'err');
+        else say('Done! Check the animation preview, then download or send it to the Slice tab.', 'ok');
+      }
+
+      function setRunning(on) {
+        st.running = on;
+        $('genBtn').disabled = on;
+        $('genCancelBtn').style.display = on ? 'inline-flex' : 'none';
+        if (on) $('genProgress').classList.add('show');
+        else setTimeout(() => { if (!st.running) $('genProgress').classList.remove('show'); }, 900);
+      }
+
+      async function generate() {
+        if (st.running) return;
+        const c = cfg();
+        try { localStorage.setItem('hordeKey', c.key); } catch (e) {}
+        st.abort = new AbortController();
+        setRunning(true);
+        $('frameChips').innerHTML = '';
+        setBar(5);
+        try {
+          if (c.mode === 'sheet') await runSheet(c, st.abort.signal);
+          else await runFrames(c, st.abort.signal);
+        } catch (e) {
+          if (e.name === 'AbortError') say('Cancelled.');
+          else { console.error(e); say('Error: ' + (e.message || e), 'err'); }
+        } finally {
+          setRunning(false);
+        }
+      }
+
+      function cancel() {
+        if (!st.abort) return;
+        const apikey = $('gKey').value.trim() || ANON_KEY;
+        st.abort.abort();
+        st.activeIds.forEach(id => {
+          fetch(HORDE_URL + '/generate/status/' + id, { method: 'DELETE', headers: { apikey } }).catch(() => {});
+        });
+        st.activeIds.clear();
+      }
+
+      // ---------- reference upload ----------
+      const refZone = $('refZone');
+      function renderRefZone(dataUrl) {
         refZone.innerHTML = '';
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        img.style.maxHeight = '120px';
-        refZone.appendChild(img);
+        const im = document.createElement('img');
+        im.src = dataUrl;
+        im.style.maxHeight = '120px';
+        refZone.appendChild(im);
         const hint = document.createElement('div');
         hint.className = 'hint';
         hint.textContent = 'Reference loaded – click or drop to replace';
@@ -506,182 +1134,194 @@
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.id = 'refInput';
         input.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer';
         input.addEventListener('change', () => { if (input.files[0]) handleRef(input.files[0]); });
         refZone.appendChild(input);
-      };
-      reader.readAsDataURL(file);
-    }
-
-    document.getElementById('genBtn').addEventListener('click', async () => {
-      const btn = document.getElementById('genBtn');
-      const progress = document.getElementById('genProgress');
-      const bar = document.getElementById('genBar');
-      btn.disabled = true;
-      progress.classList.add('show');
-      bar.style.width = '10%';
-      setStatus('genStatus', 'Submitting job to AI Horde queue…', '');
-
-      const prompt = document.getElementById('prompt').value.trim();
-      const width = parseInt(document.getElementById('genWidth').value, 10);
-      const height = parseInt(document.getElementById('genHeight').value, 10);
-      const steps = parseInt(document.getElementById('steps').value, 10) || 20;
-      const model = document.getElementById('model').value.trim();
-
-      const body = {
-        prompt: prompt,
-        params: {
-          width: width,
-          height: height,
-          steps: steps,
-          n: 1,
-          sampler_name: "k_euler",
-          cfg_scale: 7,
-          denoising_strength: refBase64 ? 0.55 : undefined
-        },
-        nsfw: false,
-        censor_nsfw: true,
-        models: model ? [model] : [],
-        r2: true
-      };
-      // Attach reference image for img2img if uploaded
-      if (refBase64) {
-        body.source_image = refBase64;
-        body.source_processing = "img2img";
+        $('refClear').style.display = 'inline-flex';
       }
 
-      try {
-        // 1. Submit
-        const submitRes = await fetch(HORDE_URL + '/generate/async', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Client-Agent': 'SpriteSheetWorkbench:1.0'
-          },
-          body: JSON.stringify(body)
-        });
+      function handleRef(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        const fr = new FileReader();
+        fr.onload = e => {
+          const img = new Image();
+          img.onload = () => { st.refImg = img; renderRefZone(e.target.result); prepareRef(); };
+          img.onerror = () => say('That file could not be read as an image.', 'err');
+          img.src = e.target.result;
+        };
+        fr.readAsDataURL(file);
+      }
 
-        if (!submitRes.ok) {
-          const errText = await submitRes.text();
-          throw new Error('Submit failed: ' + submitRes.status + ' ' + errText);
+      function prepareRef() {
+        if (!st.refImg) { st.refCanvas = null; scheduleUpdate(); return; }
+        const im = st.refImg;
+        const s = Math.min(1, 1024 / Math.max(im.naturalWidth, im.naturalHeight));
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.naturalWidth * s));
+        cv.height = Math.max(1, Math.round(im.naturalHeight * s));
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(im, 0, 0, cv.width, cv.height);
+        if ($('refKey').checked) {
+          try {
+            const p = ctx.getImageData(0, 0, 1, 1).data;
+            if (p[3] > 200) chromaKey(cv, [p[0], p[1], p[2]], 45);
+          } catch (e) {}
         }
+        st.refCanvas = trimCanvas(cv);
+        scheduleUpdate();
+      }
 
-        const submitData = await submitRes.json();
-        const id = submitData.id;
-        if (!id) throw new Error('No job ID returned');
+      refZone.addEventListener('dragover', e => { e.preventDefault(); refZone.classList.add('drag'); });
+      refZone.addEventListener('dragleave', () => refZone.classList.remove('drag'));
+      refZone.addEventListener('drop', e => {
+        e.preventDefault();
+        refZone.classList.remove('drag');
+        if (e.dataTransfer.files[0]) handleRef(e.dataTransfer.files[0]);
+      });
+      $('refInput').addEventListener('change', () => { if ($('refInput').files[0]) handleRef($('refInput').files[0]); });
+      $('refKey').addEventListener('change', prepareRef);
+      $('refClear').addEventListener('click', () => {
+        st.refImg = null; st.refCanvas = null;
+        refZone.innerHTML = '<div class="hint">Drop or click to upload your character<br><small>PNG / JPG / WebP · plain or transparent background works best</small></div>';
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*'; input.id = 'refInput';
+        input.addEventListener('change', () => { if (input.files[0]) handleRef(input.files[0]); });
+        refZone.appendChild(input);
+        $('refClear').style.display = 'none';
+        scheduleUpdate();
+      });
 
-        setStatus('genStatus', 'Job queued (ID: ' + id + '). Waiting for a free worker…', '');
-        bar.style.width = '25%';
-
-        // 2. Poll
-        let done = false;
-        let attempts = 0;
-        const maxAttempts = 120; // ~4 min
-
-        while (!done && attempts < maxAttempts) {
-          await new Promise(r => setTimeout(r, 2000));
-          attempts++;
-
-          const checkRes = await fetch(HORDE_URL + '/generate/check/' + id, {
-            headers: { 'apikey': ANON_KEY }
-          });
-          const checkData = await checkRes.json();
-
-          const pct = Math.min(25 + (checkData.wait_time ? 50 : 70), 90);
-          bar.style.width = pct + '%';
-
-          if (checkData.done) {
-            done = true;
-          } else if (checkData.faulted) {
-            throw new Error('Job faulted on the Horde');
-          } else {
-            const wait = checkData.wait_time || '?';
-            const queue = checkData.queue_position != null ? checkData.queue_position : '?';
-            setStatus('genStatus', `In queue… position ${queue}, ~${wait}s remaining`, '');
-          }
+      // ---------- live preview of what will be sent ----------
+      function updateModeUI() {
+        const frames = $('gMode').value === 'frames';
+        $('cellWrap').style.display = frames ? '' : 'none';
+        $('gSizeLabel').textContent = frames ? 'Frame generation size (px)' : 'Generation size (px, long side)';
+        if (!st.denoiseTouched) {
+          $('gDenoise').value = frames ? '0.6' : '0.7';
         }
+        $('gDenoiseVal').textContent = parseFloat($('gDenoise').value).toFixed(2);
+      }
 
-        if (!done) throw new Error('Timed out waiting for AI Horde');
-
-        // 3. Get result
-        const statusRes = await fetch(HORDE_URL + '/generate/status/' + id, {
-          headers: { 'apikey': ANON_KEY }
-        });
-        const statusData = await statusRes.json();
-
-        if (!statusData.generations || !statusData.generations.length) {
-          throw new Error('No image returned');
+      function updatePreview() {
+        updateModeUI();
+        const c = cfg();
+        const box = $('tplPreview');
+        $('promptPreview').textContent = 'Prompt: ' + (c.mode === 'sheet' ? sheetPrompt(c) : framePrompt(c, 0));
+        $('genEstimate').textContent = c.mode === 'sheet'
+          ? 'Whole sheet: 1 job, usually 30–120 seconds on the free queue. Fast, but the AI may drift between cells.'
+          : `Frame by frame: ${c.n} jobs, roughly ${Math.max(2, Math.round(c.n * 45 / c.conc / 60))}–${Math.max(4, Math.round(c.n * 90 / c.conc / 60))} minutes on the free queue. Slower, but each frame stays closer to your reference.`;
+        if (!st.refCanvas) {
+          box.innerHTML = '<span style="color:var(--muted);font-size:0.9rem">Upload a reference to see the template</span>';
+          return;
         }
+        const tpl = c.mode === 'sheet' ? buildSheetTemplate(c) : buildFrameTemplate(c, 0);
+        tpl.style.maxHeight = '260px';
+        tpl.style.maxWidth = '100%';
+        box.innerHTML = '';
+        box.appendChild(tpl);
+      }
+      function scheduleUpdate() {
+        clearTimeout(st.tplTimer);
+        st.tplTimer = setTimeout(updatePreview, 120);
+      }
+      document.querySelectorAll('#panel-gen select, #panel-gen input, #panel-gen textarea').forEach(el => {
+        if (el.type === 'file') return;
+        el.addEventListener('input', scheduleUpdate);
+        el.addEventListener('change', scheduleUpdate);
+      });
+      $('gDenoise').addEventListener('input', () => { st.denoiseTouched = true; });
+      $('gFps').addEventListener('input', startAnim);
 
-        const gen = statusData.generations[0];
-        genImgUrl = gen.img;
+      // ---------- result actions ----------
+      $('genBtn').addEventListener('click', generate);
+      $('genCancelBtn').addEventListener('click', cancel);
 
-        // Load image
+      $('genDlBtn').addEventListener('click', () => {
+        const r = st.res;
+        if (!r) return;
+        try {
+          r.cur.toBlob(b => {
+            if (!b) { say('Could not export the image.', 'err'); return; }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = `sprite-sheet-${r.cols}x${r.rows}-${Date.now()}.png`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+          }, 'image/png');
+        } catch (e) {
+          say('The browser blocked exporting this image (cross-origin). Right-click the result and choose "Save image as…".', 'err');
+        }
+      });
+
+      $('sendToSliceBtn').addEventListener('click', () => {
+        const r = st.res;
+        if (!r) return;
+        let url;
+        try { url = r.cur.toDataURL('image/png'); }
+        catch (e) { say('The browser blocked reading this image (cross-origin). Save it manually and load it in the Slice tab.', 'err'); return; }
         const img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error('Failed to load result image'));
-          img.src = genImgUrl;
-        });
+        img.onload = () => {
+          sheetImg = img;
+          const zone = $('sheetZone');
+          zone.innerHTML = '';
+          const preview = document.createElement('img');
+          preview.src = url;
+          zone.appendChild(preview);
+          const hint = document.createElement('div');
+          hint.className = 'hint';
+          hint.textContent = 'Generated sheet loaded – click or drop to replace';
+          zone.appendChild(hint);
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer';
+          input.addEventListener('change', () => { if (input.files[0]) handleSheet(input.files[0]); });
+          zone.appendChild(input);
 
-        genImgElement = img;
-        const preview = document.getElementById('genPreview');
-        preview.innerHTML = '';
-        const display = document.createElement('img');
-        display.src = genImgUrl;
-        display.style.maxWidth = '100%';
-        preview.appendChild(display);
+          $('cols').value = r.cols;
+          $('rows').value = r.rows;
+          $('frameCount').value = '';
+          $('playFps').value = clamp(parseInt($('gFps').value, 10) || 8, 1, 30);
 
-        document.getElementById('genDlBtn').disabled = false;
-        document.getElementById('sendToSliceBtn').disabled = false;
-        document.getElementById('genMeta').textContent = `${width}×${height} · seed ${gen.seed || 'n/a'}`;
-        bar.style.width = '100%';
-        setStatus('genStatus', 'Done! Image generated via AI Horde.', 'ok');
-        setTimeout(() => progress.classList.remove('show'), 800);
+          document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+          document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+          document.querySelector('[data-panel="slice"]').classList.add('active');
+          $('panel-slice').classList.add('active');
+          $('sliceBtn').disabled = false;
+          $('sliceBtn').click();
+        };
+        img.src = url;
+      });
 
-      } catch (err) {
-        console.error(err);
-        setStatus('genStatus', 'Error: ' + (err.message || err), 'err');
-        progress.classList.remove('show');
-      } finally {
-        btn.disabled = false;
-      }
-    });
+      $('keyBtn').addEventListener('click', () => {
+        const r = st.res;
+        if (!r) return;
+        try {
+          const cv = cloneCanvas(r.base);
+          let rgb;
+          if ($('keyMode').value === 'corner') {
+            const p = cv.getContext('2d').getImageData(2, 2, 1, 1).data;
+            rgb = [p[0], p[1], p[2]];
+          } else rgb = hexToRgb($('gBg').value);
+          chromaKey(cv, rgb, parseInt($('keyTol').value, 10));
+          r.cur = cv;
+          renderResult();
+          say('Background removed. Adjust the tolerance and click again to refine, or Restore to undo.', 'ok');
+        } catch (e) {
+          say('The browser blocked reading this image\'s pixels (cross-origin), so the background cannot be removed here.', 'err');
+        }
+      });
+      $('keyResetBtn').addEventListener('click', () => {
+        const r = st.res;
+        if (!r) return;
+        r.cur = cloneCanvas(r.base);
+        renderResult();
+      });
 
-    document.getElementById('genDlBtn').addEventListener('click', () => {
-      if (!genImgUrl) return;
-      const a = document.createElement('a');
-      a.href = genImgUrl;
-      a.download = `horde-sprite-${Date.now()}.webp`;
-      a.target = '_blank';
-      a.click();
-    });
-
-    document.getElementById('sendToSliceBtn').addEventListener('click', () => {
-      if (!genImgElement) return;
-      // Switch to slice tab and load the image
-      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
-      document.querySelector('[data-panel="slice"]').classList.add('active');
-      document.getElementById('panel-slice').classList.add('active');
-
-      // Simulate loading the generated image into the slice zone
-      sheetImg = genImgElement;
-      const zone = document.getElementById('sheetZone');
-      zone.innerHTML = '';
-      const preview = document.createElement('img');
-      preview.src = genImgElement.src;
-      zone.appendChild(preview);
-      const hint = document.createElement('div');
-      hint.className = 'hint';
-      hint.textContent = 'Generated image loaded – set 4×4 and click Slice';
-      zone.appendChild(hint);
-      document.getElementById('sliceBtn').disabled = false;
-      setStatus('sliceStatus', 'Image from AI Horde loaded. Set Columns=4, Rows=4 and click Slice.', 'ok');
-    });
+      // ---------- init ----------
+      try { $('gKey').value = localStorage.getItem('hordeKey') || ''; } catch (e) {}
+      updatePreview();
+    })();
 
     // ===== SLICE =====
     let sheetImg = null;
